@@ -1,0 +1,14 @@
+{
+  "name": "Board",
+  "short_name": "Board",
+  "description": "Cross-project task board, synced across devices and Claude.",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "start_url": ".",
+  "scope": ".",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

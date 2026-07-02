@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Board" />
+<title>Board</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon.png" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --text: #e7eaf0;
+    --muted: #8a92a6;
+    --accent: #4f8cff;
+    --accent-2: #2f6fe0;
+    --done: #5b6478;
+    --danger: #ff5d6c;
+    --border: #262b36;
+    --high: #ff5d6c;
+    --med: #f0b429;
+    --low: #6b7383;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 620px;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: max(20px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--done); }
+  .dot.live { background: #38d39f; box-shadow: 0 0 8px #38d39f88; }
+  .dot.local { background: #f0b429; }
+  .dot.connecting { background: #4f8cff; }
+
+  form.add { display: flex; gap: 8px; margin-bottom: 6px; }
+  input[type="text"] {
+    flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    font-size: 16px; padding: 14px; border-radius: 12px; outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  button {
+    border: none; cursor: pointer; font-size: 16px; border-radius: 12px; color: white;
+    background: var(--accent); padding: 0 18px; font-weight: 600; transition: background .15s;
+  }
+  button:active { background: var(--accent-2); }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
+  select.proj {
+    background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 10px; font-size: 13px; outline: none;
+  }
+  .toolbar .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  section.col { margin-top: 14px; }
+  .col-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 2px 8px; }
+  .col-head .n { background: var(--panel-2); color: var(--muted); border-radius: 20px; padding: 1px 8px; font-size: 12px; }
+
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; margin-bottom: 8px; animation: pop .12s ease;
+    border-left: 3px solid var(--low);
+  }
+  li.p-high { border-left-color: var(--high); }
+  li.p-med { border-left-color: var(--med); }
+  li.done { opacity: .55; }
+  @keyframes pop { from { transform: scale(.98); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+
+  .row1 { display: flex; align-items: flex-start; gap: 10px; }
+  .src { flex: 0 0 auto; font-size: 15px; margin-top: 1px; }
+  .src.claude { color: var(--accent); }
+  .src.loren { color: var(--muted); }
+  .label { flex: 1; font-size: 16px; line-height: 1.4; word-break: break-word; cursor: text; }
+  li.done .label { color: var(--done); text-decoration: line-through; }
+  .del { background: transparent; color: var(--muted); padding: 2px 6px; font-size: 17px; opacity: .5; }
+  .del:active { color: var(--danger); }
+
+  .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 20px; background: var(--panel-2); color: var(--muted); cursor: pointer; }
+  .flag { font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+  .flag.high { color: var(--high); } .flag.med { color: var(--med); } .flag.low { color: var(--low); }
+  .due { font-size: 12px; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+  .note { font-size: 12px; color: var(--muted); font-style: italic; }
+  select.move {
+    margin-left: auto; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none;
+  }
+  .empty { text-align: center; color: var(--muted); margin-top: 48px; font-size: 15px; }
+</style>
+</head>
+<body>
+<div id="login" style="display:none; position:absolute; inset:0; background:var(--bg); z-index:50; align-items:center; justify-content:center; padding:24px;">
+  <form id="loginForm" style="width:100%; max-width:340px; display:flex; flex-direction:column; gap:12px;">
+    <h1 style="font-size:26px; margin:0 0 4px;">Board</h1>
+    <p style="color:var(--muted); font-size:14px; margin:0 0 8px;">Sign in to sync your tasks.</p>
+    <input type="email" id="email" placeholder="Email" autocomplete="username" style="background:var(--panel); border:1px solid var(--border); color:var(--text); font-size:16px; padding:14px; border-radius:12px; outline:none;" />
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password" style="background:var(--panel); border:1px solid var(--border); color:var(--text); font-size:16px; padding:14px; border-radius:12px; outline:none;" />
+    <button type="submit" id="loginBtn" style="padding:14px; font-size:16px;">Sign in</button>
+    <p id="loginMsg" style="color:var(--muted); font-size:13px; margin:2px 0 0; min-height:18px;"></p>
+  </form>
+</div>
+<div class="app">
+  <header>
+    <h1>Board</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Local only</span></div>
+  </header>
+
+  <form class="add" id="addForm">
+    <input type="text" id="addInput" placeholder="Add a task…" autocomplete="off" />
+    <button type="submit">Add</button>
+  </form>
+  <div class="toolbar">
+    <select class="proj" id="addProj" aria-label="Project for new task"></select>
+    <span class="hint">new tasks land in To do</span>
+  </div>
+
+  <div id="board"></div>
+  <div class="empty" id="empty" style="display:none;">Nothing here yet. Add your first task above.</div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Firebase web config to turn on sync.
+   Leave as null to run local-only on this device.
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBA0Q_PNmADqa8rEQmZgFV2HSLWvndA5SE",
+  authDomain: "loren-board.firebaseapp.com",
+  projectId: "loren-board",
+  storageBucket: "loren-board.firebasestorage.app",
+  messagingSenderId: "244714197042",
+  appId: "1:244714197042:web:aabdbaa3d2da3a2db26c2b"
+};
+
+/* Projects: key -> display label. Add freely. */
+const PROJECTS = {
+  general:  "general",
+  finance:  "finances",
+  tesla:    "tesla-lease",
+  resume:   "resumE",
+  uv:       "uv-free",
+  app:      "finance-app",
+  jobs:     "job-search",
+  house:    "house",
+};
+const COLS = [
+  { id: "todo",    label: "To do" },
+  { id: "doing",   label: "In progress" },
+  { id: "waiting", label: "Waiting" },
+  { id: "done",    label: "Done" },
+];
+const PRIO_ORDER = { high: 0, med: 1, low: 2 };
+const PRIO_NEXT  = { high: "med", med: "low", low: "high" };
+
+/* ---- State ---- */
+let tasks = [];        // [{id, text, project, status, priority, due, note, source, order, updatedAt}]
+let db = null, fs = null;
+
+const $ = (s) => document.querySelector(s);
+const boardEl = $("#board");
+const emptyEl = $("#empty");
+const dotEl = $("#dot");
+const statusText = $("#statusText");
+
+/* ---- Local storage ---- */
+const LS_KEY = "board.tasks.v2";
+function loadLocal() { try { tasks = JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { tasks = []; } }
+function saveLocal() { localStorage.setItem(LS_KEY, JSON.stringify(tasks)); }
+const synced = () => !!db;
+
+/* ---- Helpers ---- */
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function escapeHtml(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+function projLabel(k) { return PROJECTS[k] || k || "general"; }
+
+/* ---- Render ---- */
+function render() {
+  boardEl.innerHTML = "";
+  for (const col of COLS) {
+    const items = tasks
+      .filter(t => (t.status || "todo") === col.id)
+      .sort((a, b) => (PRIO_ORDER[a.priority] ?? 1) - (PRIO_ORDER[b.priority] ?? 1) || (b.updatedAt || 0) - (a.updatedAt || 0));
+    const sec = document.createElement("section");
+    sec.className = "col";
+    sec.innerHTML = `<div class="col-head">${col.label}<span class="n">${items.length}</span></div>`;
+    const ul = document.createElement("ul");
+    for (const t of items) ul.appendChild(cardEl(t));
+    sec.appendChild(ul);
+    boardEl.appendChild(sec);
+  }
+  emptyEl.style.display = tasks.length === 0 ? "block" : "none";
+}
+
+function cardEl(t) {
+  const li = document.createElement("li");
+  const prio = t.priority || "med";
+  li.className = `p-${prio}${t.status === "done" ? " done" : ""}`;
+  const srcIcon = t.source === "claude" ? "◆" : "○";
+  const options = COLS.map(c => `<option value="${c.id}"${c.id === (t.status||"todo") ? " selected" : ""}>${c.label}</option>`).join("");
+  li.innerHTML = `
+    <div class="row1">
+      <span class="src ${t.source === "claude" ? "claude" : "loren"}" title="${t.source === "claude" ? "Added by Claude" : "Added by you"}">${srcIcon}</span>
+      <div class="label" data-act="text" data-id="${t.id}">${escapeHtml(t.text)}</div>
+      <button class="del" data-act="del" data-id="${t.id}" aria-label="Delete">✕</button>
+    </div>
+    <div class="meta">
+      <span class="pill" data-act="proj" data-id="${t.id}">${escapeHtml(projLabel(t.project))}</span>
+      <span class="flag ${prio}" data-act="prio" data-id="${t.id}">⚑ ${prio}</span>
+      <span class="due" data-act="due" data-id="${t.id}">▤ ${t.due ? escapeHtml(t.due) : "no date"}</span>
+      ${t.note ? `<span class="note">${escapeHtml(t.note)}</span>` : ""}
+      <select class="move" data-act="move" data-id="${t.id}" aria-label="Status">${options}</select>
+    </div>`;
+  return li;
+}
+
+/* ---- Mutations (branch on synced) ---- */
+function commitLocal() { saveLocal(); render(); }
+
+function addTask(text, project) {
+  text = (text || "").trim();
+  if (!text) return;
+  const t = { id: newId(), text, project: project || "general", status: "todo", priority: "med", due: "", note: "", source: "loren", order: Date.now(), updatedAt: Date.now() };
+  if (synced()) { fs.setDoc(fs.doc(db, "tasks", t.id), t); }
+  else { tasks.push(t); commitLocal(); }
+}
+function updateTask(id, patch) {
+  patch.updatedAt = Date.now();
+  if (synced()) { fs.updateDoc(fs.doc(db, "tasks", id), patch).catch(e => console.warn(e)); }
+  else {
+    const t = tasks.find(t => t.id === id);
+    if (t) { Object.assign(t, patch); commitLocal(); }
+  }
+}
+function removeTask(id) {
+  if (synced()) { fs.deleteDoc(fs.doc(db, "tasks", id)).catch(e => console.warn(e)); }
+  else { tasks = tasks.filter(t => t.id !== id); commitLocal(); }
+}
+
+/* ---- Events ---- */
+$("#addForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = $("#addInput");
+  addTask(input.value, $("#addProj").value);
+  input.value = "";
+});
+boardEl.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const { act, id } = el.dataset;
+  const t = tasks.find(t => t.id === id);
+  if (!t) return;
+  if (act === "del") { removeTask(id); }
+  else if (act === "text") { const v = prompt("Edit task", t.text); if (v !== null && v.trim()) updateTask(id, { text: v.trim() }); }
+  else if (act === "prio") { updateTask(id, { priority: PRIO_NEXT[t.priority || "med"] }); }
+  else if (act === "due") { const v = prompt("Due (e.g. Jul 15, or blank)", t.due || ""); if (v !== null) updateTask(id, { due: v.trim() }); }
+  else if (act === "proj") {
+    const keys = Object.keys(PROJECTS);
+    const cur = keys.indexOf(t.project);
+    const next = keys[(cur + 1) % keys.length];
+    updateTask(id, { project: next });
+  }
+});
+boardEl.addEventListener("change", (e) => {
+  const el = e.target.closest('[data-act="move"]');
+  if (!el) return;
+  updateTask(el.dataset.id, { status: el.value });
+});
+
+/* ---- Populate the new-task project picker ---- */
+$("#addProj").innerHTML = Object.entries(PROJECTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+
+/* ---- Sync + auth ---- */
+let auth = null, authMod = null, snapStarted = false;
+function setStatus(mode) {
+  dotEl.className = "dot " + mode;
+  statusText.textContent = mode === "live" ? "Synced" : mode === "local" ? "Local only" : "Connecting…";
+}
+function showLogin(show) { document.getElementById("login").style.display = show ? "flex" : "none"; }
+
+function startSnapshot() {
+  if (snapStarted) return;
+  snapStarted = true;
+  let firstSnap = true;
+  fs.onSnapshot(fs.collection(db, "tasks"), (snap) => {
+    /* First sync with an empty remote but tasks on this device:
+       push them up instead of letting the empty snapshot wipe them. */
+    if (firstSnap && snap.empty && tasks.length) {
+      firstSnap = false;
+      tasks.forEach(t => fs.setDoc(fs.doc(db, "tasks", t.id), t).catch(e => console.warn(e)));
+      setStatus("live");
+      return;
+    }
+    firstSnap = false;
+    tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    saveLocal();
+    render();
+    setStatus("live");
+  }, (err) => { console.warn("sync error", err); setStatus("local"); });
+}
+
+async function initSync() {
+  if (!FIREBASE_CONFIG) { setStatus("local"); return; }
+  setStatus("connecting");
+  try {
+    const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    fs = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    db = fs.getFirestore(app);
+    auth = authMod.getAuth(app);
+
+    authMod.onAuthStateChanged(auth, (user) => {
+      if (user) { showLogin(false); startSnapshot(); }
+      else { showLogin(true); setStatus("local"); }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const pw = document.getElementById("password").value;
+      const msg = document.getElementById("loginMsg");
+      const btn = document.getElementById("loginBtn");
+      if (!email || !pw) return;
+      btn.disabled = true; msg.style.color = "var(--muted)"; msg.textContent = "Signing in…";
+      try {
+        await authMod.signInWithEmailAndPassword(auth, email, pw);
+      } catch (err) {
+        if (err.code === "auth/user-not-found") {
+          try { await authMod.createUserWithEmailAndPassword(auth, email, pw); }
+          catch (e2) { msg.style.color = "var(--danger)"; msg.textContent = "Couldn't create account: " + e2.code; }
+        } else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
+          msg.style.color = "var(--danger)"; msg.textContent = "Wrong password. Try again.";
+        } else {
+          msg.style.color = "var(--danger)"; msg.textContent = err.code || "Sign-in failed.";
+        }
+      } finally { btn.disabled = false; }
+    });
+  } catch (err) {
+    console.warn("Firebase unavailable, local-only:", err);
+    setStatus("local");
+  }
+}
+
+/* ---- Service worker (offline) ---- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
+/* ---- Boot ---- */
+loadLocal();
+render();
+initSync();
+</script>
+</body>
+</html>
