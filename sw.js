@@ -1,5 +1,5 @@
 /* Minimal offline cache. Bump CACHE to force an update after edits. */
-const CACHE = "board-v2";
+const CACHE = "board-v3";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.png"];
 
 self.addEventListener("install", (e) => {

@@ -344,11 +344,18 @@ async function initSync() {
       try {
         await authMod.signInWithEmailAndPassword(auth, email, pw);
       } catch (err) {
-        if (err.code === "auth/user-not-found") {
-          try { await authMod.createUserWithEmailAndPassword(auth, email, pw); }
-          catch (e2) { msg.style.color = "var(--danger)"; msg.textContent = "Couldn't create account: " + e2.code; }
-        } else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
-          msg.style.color = "var(--danger)"; msg.textContent = "Wrong password. Try again.";
+        /* Email-enumeration protection (on by default) collapses "no such account" and
+           "wrong password" into auth/invalid-credential. So if sign-in fails, try to CREATE
+           the account; only if it already exists was it genuinely a wrong password. */
+        if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
+          try {
+            await authMod.createUserWithEmailAndPassword(auth, email, pw);
+          } catch (e2) {
+            msg.style.color = "var(--danger)";
+            if (e2.code === "auth/email-already-in-use") msg.textContent = "Wrong password. Try again.";
+            else if (e2.code === "auth/weak-password") msg.textContent = "Password too short (min 6 characters).";
+            else msg.textContent = e2.code || "Couldn't sign in.";
+          }
         } else {
           msg.style.color = "var(--danger)"; msg.textContent = err.code || "Sign-in failed.";
         }
