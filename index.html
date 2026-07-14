@@ -106,6 +106,9 @@
   .flag { font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
   .flag.high { color: var(--high); } .flag.med { color: var(--med); } .flag.low { color: var(--low); }
   .due { font-size: 11px; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+  .wake { font-size: 11px; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+  li.snoozed { opacity: .6; }
+  li.snoozed.expanded { opacity: 1; }
   .edit { display: none; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 6px; }
   li.expanded .edit { display: inline-block; }
   .note { display: none; }
@@ -187,7 +190,8 @@ const PRIO_ORDER = { high: 0, med: 1, low: 2 };
 const PRIO_NEXT  = { high: "med", med: "low", low: "high" };
 
 /* ---- State ---- */
-let tasks = [];        // [{id, text, project, status, priority, due, note, source, order, updatedAt}]
+let tasks = [];        // [{id, text, project, status, priority, due, wake, note, source, order, updatedAt}]
+                       // wake = ISO date (YYYY-MM-DD): a Waiting task auto-moves to To do on/after this day.
 let db = null, fs = null;
 const expandedCards = new Set();
 let collapsedCols;
@@ -210,6 +214,27 @@ const synced = () => !!db;
 function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function escapeHtml(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function projLabel(k) { return PROJECTS[k] || k || "general"; }
+function isoOf(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function isoToday() { return isoOf(new Date()); }
+/* Accepts "YYYY-MM-DD", "+14" (days from now), a parseable date, or "" to clear. Returns null if unreadable. */
+function parseWakeInput(v) {
+  v = (v || "").trim().toLowerCase();
+  if (!v) return "";
+  const rel = v.match(/^\+\s*(\d+)\s*d?$/);
+  if (rel) { const d = new Date(); d.setDate(d.getDate() + parseInt(rel[1], 10)); return isoOf(d); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : isoOf(d);
+}
+/* Promote any Waiting task whose wake date has arrived into To do, and clear the date. */
+function checkWakes() {
+  const today = isoToday();
+  for (const t of tasks) {
+    if ((t.status || "todo") === "waiting" && t.wake && t.wake <= today) {
+      updateTask(t.id, { status: "todo", wake: "" });
+    }
+  }
+}
 
 /* ---- Render ---- */
 function render() {
@@ -232,7 +257,8 @@ function render() {
 function cardEl(t) {
   const li = document.createElement("li");
   const prio = t.priority || "med";
-  li.className = `p-${prio}${t.status === "done" ? " done" : ""}${expandedCards.has(t.id) ? " expanded" : ""}`;
+  const isSnoozed = !!t.wake && t.wake > isoToday();
+  li.className = `p-${prio}${t.status === "done" ? " done" : ""}${expandedCards.has(t.id) ? " expanded" : ""}${isSnoozed ? " snoozed" : ""}`;
   const srcIcon = t.source === "claude" ? "◆" : "○";
   const pc = PROJ_COLORS[t.project] || "#8a92a6";
   const options = COLS.map(c => `<option value="${c.id}"${c.id === (t.status||"todo") ? " selected" : ""}>${c.label}</option>`).join("");
@@ -247,6 +273,8 @@ function cardEl(t) {
       <span class="flag ${prio}" data-act="prio" data-id="${t.id}">⚑ ${prio}</span>
       ${t.due ? `<span class="due" data-act="due" data-id="${t.id}">▤ ${escapeHtml(t.due)}</span>`
               : `<span class="due" data-act="due" data-id="${t.id}" style="opacity:.5">▤</span>`}
+      ${t.wake ? `<span class="wake" data-act="wake" data-id="${t.id}" title="Wakes into To do on this date">☾ ${escapeHtml(t.wake)}</span>`
+               : `<span class="wake" data-act="wake" data-id="${t.id}" title="Snooze until a date" style="opacity:.45">☾</span>`}
       <button class="edit" data-act="edit" data-id="${t.id}" aria-label="Edit text">✎ edit</button>
       <select class="move" data-act="move" data-id="${t.id}" aria-label="Status">${options}</select>
       ${t.note ? `<span class="note">${escapeHtml(t.note)}</span>` : ""}
@@ -260,7 +288,7 @@ function commitLocal() { saveLocal(); render(); }
 function addTask(text, project) {
   text = (text || "").trim();
   if (!text) return;
-  const t = { id: newId(), text, project: project || "general", status: "todo", priority: "med", due: "", note: "", source: "loren", order: Date.now(), updatedAt: Date.now() };
+  const t = { id: newId(), text, project: project || "general", status: "todo", priority: "med", due: "", wake: "", note: "", source: "loren", order: Date.now(), updatedAt: Date.now() };
   if (synced()) { fs.setDoc(fs.doc(db, "tasks", t.id), t); }
   else { tasks.push(t); commitLocal(); }
 }
@@ -306,6 +334,17 @@ boardEl.addEventListener("click", (e) => {
   else if (act === "edit") { const v = prompt("Edit task", t.text); if (v !== null && v.trim()) updateTask(id, { text: v.trim() }); }
   else if (act === "prio") { updateTask(id, { priority: PRIO_NEXT[t.priority || "med"] }); }
   else if (act === "due") { const v = prompt("Due (e.g. Jul 15, or blank)", t.due || ""); if (v !== null) updateTask(id, { due: v.trim() }); }
+  else if (act === "wake") {
+    const v = prompt("Snooze until — reappears in To do on this date.\nYYYY-MM-DD, or +14 for 14 days out. Blank clears.", t.wake || "");
+    if (v !== null) {
+      const parsed = parseWakeInput(v);
+      if (parsed === null) { alert("Couldn't read that date. Use YYYY-MM-DD (e.g. 2026-08-01) or +14."); return; }
+      const patch = { wake: parsed };
+      /* Setting a future wake on an active task parks it in Waiting until then. */
+      if (parsed && parsed > isoToday() && (t.status === "todo" || t.status === "doing")) patch.status = "waiting";
+      updateTask(id, patch);
+    }
+  }
   else if (act === "proj") {
     const keys = Object.keys(PROJECTS);
     const cur = keys.indexOf(t.project);
@@ -346,6 +385,7 @@ function startSnapshot() {
     firstSnap = false;
     tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     saveLocal();
+    checkWakes();
     render();
     setStatus("live");
   }, (err) => { console.warn("sync error", err); setStatus("local"); });
@@ -408,8 +448,14 @@ if ("serviceWorker" in navigator) {
 
 /* ---- Boot ---- */
 loadLocal();
+checkWakes();
 render();
 initSync();
+
+/* Re-check snoozed tasks periodically and whenever the app regains focus,
+   so a wake date fires even if the board is left open past midnight. */
+setInterval(checkWakes, 5 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkWakes(); });
 </script>
 </body>
 </html>

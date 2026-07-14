@@ -20,6 +20,7 @@ Each task is one document, id = random string. Fields:
 | `status`    | `todo` · `doing` · `waiting` · `done`    |
 | `priority`  | `high` · `med` · `low`                   |
 | `due`       | freeform string ("Jul 3") or ""          |
+| `wake`      | ISO date ("2026-08-01") or ""            |
 | `note`      | short note ("plan opens") or ""          |
 | `source`    | `claude` or `loren`                      |
 | `order`     | number (creation order)                  |
@@ -82,6 +83,13 @@ curl -X PATCH \
 ```
 
 Changes appear on the phone instantly (Firestore realtime listener).
+
+### Snooze / wake dates
+
+Set `wake` to an ISO date (`YYYY-MM-DD`) on a `waiting` task and the app moves it to
+`todo` on/after that day (checked on load, on focus, and every 5 min). Tap the **☾** on any
+card to set it; setting a future wake on an active task auto-parks it in `waiting`. Via CLI:
+`board.sh set <id> wake 2026-08-01`.
 
 ## Security (optional hardening, later)
 
