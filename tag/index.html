@@ -86,7 +86,7 @@
 <div id="menu">
   <h1>TAG</h1>
   <div class="sub">grab cores · bank them for points · don't get tagged holding one · most points wins</div>
-  <div class="sub" style="color:#8aa0b4">steal from rivals by knocking the core out of their hands — the Striker's R-click shove does it, and getting tagged makes anyone drop what they carry</div>
+  <div class="sub" style="color:#8aa0b4">steal by running INTO a core carrier — it knocks the core loose for you to grab. (getting tagged, or a Striker's shove, drops it too.) win a match to earn a ⭐ on your model.</div>
   <div class="card">
     <div class="row">
       <canvas id="pcv" width="118" height="118"></canvas>
@@ -95,15 +95,13 @@
     <div class="row"><span class="lbl">Class</span><div class="classes" id="classes"></div></div>
     <div class="row clsrow"><span class="lbl"></span><div id="classInfo" class="clsinfo"></div></div>
     <div class="row"><span class="lbl">Color</span><div class="swatches" id="swatches"></div></div>
-    <div class="row"><span class="lbl">Photo</span><label class="acc" for="avatarUp" style="cursor:pointer">upload image</label><input type="file" id="avatarUp" accept="image/*" style="display:none"><button id="avatarClear" class="acc">use color</button></div>
-    <div class="row"><span class="lbl">Accessory</span><div class="accs" id="accs"></div></div>
     <button id="play">PLAY (vs bots)</button>
     <div class="mprow">
       <button id="hostBtn" class="mpbtn">Host online game</button>
       <button id="joinBtn" class="mpbtn">Join with code</button>
     </div>
     <div id="netbox" class="netbox"></div>
-    <div class="hint">WASD move · Space dash · R-click your class ability · <b style="color:#ffd479">F steal</b> (bump a nearby carrier to knock their core loose) · L-click doors · M/N audio · R restart · T tuning</div>
+    <div class="hint">WASD move · Space dash · R-click your class ability · L-click doors · <b style="color:#ffd479">run into a core carrier to knock it loose</b> · M/N audio · R restart · T tuning</div>
   </div>
 </div>
 
@@ -149,7 +147,7 @@ const CFG = {
 
   // CARRY-AND-BANK scoring: grab a loose core, run it to a bank to score. Carrying slows you and
   // lights you up; getting tagged or shoved drops it into a loose scramble. IT can't carry or bank.
-  coreCount:   3,     // loose cores on the map at once
+  coreCount:   2,     // loose cores on the map at once (2, matching the 2 banks — less chaos)
   coreRadius:  13,    // pickup body size
   carrySlow:   0.80,  // speed multiplier while carrying a core (a real but not crippling tax)
   carryValue:  10,    // base points banked per core
@@ -163,10 +161,10 @@ const CFG = {
   bankSpread:  520,   // min distance banks try to keep from each other when (re)placed
   dropScatter: 34,    // how far a dropped core skitters from the fumble
 
-  // MELEE STEAL — EVERY runner can do this (press F). A short-range bump: get close to a (slowed) core
-  // carrier and knock the core loose toward you, shove + briefly stun them. The universal way to steal,
-  // separate from the Striker's ranged aimed shove. Carriers are slowed, so a chaser can close the gap.
-  meleeRange: 62, meleeKnock: 360, meleeStun: 0.35, meleeCd: 1.1,
+  // COLLISION STEAL — no button: just run INTO a core carrier and it pops loose. The core squirts out
+  // in the hitter's direction of travel (ahead of them) so a clean check pops the puck for you to grab.
+  // A brief immunity after a hit stops it re-triggering every frame / chaining through a crowd.
+  stealDist: 30, stealPop: 46, stealMinSpeed: 70, stealImmune: 0.55,
 
   // doors — runners open/close them freely to juke (DBD-pallet-style). IT can't toggle:
   // IT must BREAK a closed door (a channel that stops it), which is what buys the runner distance.
@@ -477,11 +475,11 @@ const pick = a => a[Math.floor(Math.random()*a.length)];
 
 // human tap edges (dash / door / ability). Set on the keydown edge, consumed & cleared each frame.
 // abilHeld tracks whether the ability button is currently DOWN (Striker holds to aim, releases to fire).
-let tapDash=false, tapDoor=false, tapAbil=false, tapMelee=false, abilHeld=false;
+let tapDash=false, tapDoor=false, tapAbil=false, abilHeld=false;
 window.addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   initAudio();
-  if (!keys[k]){ if (k===" "||k==="shift") tapDash=true; if (k==="e") tapDoor=true; if (k==="q"){ tapAbil=true; abilHeld=true; } if (k==="f") tapMelee=true; }   // Space/Shift=dash, E=door(alt), Q=ability, F=melee steal (mouse primary: LMB door, RMB ability)
+  if (!keys[k]){ if (k===" "||k==="shift") tapDash=true; if (k==="e") tapDoor=true; if (k==="q"){ tapAbil=true; abilHeld=true; } }   // Space/Shift=dash, E=door(alt), Q=ability (mouse primary: LMB door, RMB ability). Stealing is collision-based — just run into carriers.
   keys[k] = true;
   if (e.key === " ") e.preventDefault();
   if (k === "r" && started && net.mode!=="client") reset();   // clients are driven by the host; don't self-reset
@@ -526,17 +524,32 @@ function makePlayer(x, y, human, name, color) {
     aiPath:null, aiPathI:0, aiPathGoal:null, aiPatrol:null,
     breakDoor:null, breakT:0, doorSlowT:0,
     dash:{t:0,dir:{x:0,y:0}}, dashCharges:CFG.dashCharges, dashRegenT:0, dashCdT:0, aiDashT:0,
-    cls:"striker", abilCdT:0, shoveT:0, shoveAng:0, blinkT:0, aiming:false, aimAng:-Math.PI/2, meleeCdT:0,
+    cls:"striker", abilCdT:0, shoveT:0, shoveAng:0, blinkT:0, aiming:false, aimAng:-Math.PI/2,
     blockCharges:CFG.blockCharges, blockRegenT:0,   // ghost (interference) temp-block charges
-    trail:[], trailT:0, speed:0, carrying:null, score:0, rank:0, accessory:"none", img:null,
+    trail:[], trailT:0, speed:0, carrying:null, score:0, rank:0, accessory:"none", img:null, wins:0,
     remote:false, slot:-1, conn:null };   // multiplayer: a remote player's slot is driven by network input
+}
+// persistent win count (localStorage) — shown as a gold star with a number on your model, to show off
+function loadWins(){ try{ return parseInt(localStorage.getItem("tag_wins")||"0",10)||0; }catch(e){ return 0; } }
+function awardWin(){ const w=loadWins()+1; try{ localStorage.setItem("tag_wins", w); }catch(e){}
+  custom.wins=w; if(players[0]) players[0].wins=w;
+  if (net.mode==="client" && net.conns[0] && net.conns[0].open){ try{ net.conns[0].send({t:"wins", n:w}); }catch(e){} }  // tell host so others see it live
+}
+// credit a win once, the moment a match ends, if MY player (index 0) is the top surviving scorer
+function checkWinCredit(){
+  if (match.phase!=="over"){ match._winChecked=false; return; }
+  if (match._winChecked) return; match._winChecked=true;
+  const me=players[0]; if(!me || me.role==="interference") return;
+  const act=activePlayers(); if(!act.length) return;
+  const top=act.reduce((a,b)=> b.score>a.score?b:a, act[0]);
+  if (top===me) awardWin();
 }
 function reset() {
   players = []; cullSeq = 0;
   const spots = [ {x:800,y:1000},{x:300,y:300},{x:1300,y:300},
     {x:300,y:820},{x:1300,y:820},{x:800,y:120},{x:150,y:560},{x:1450,y:560} ];
   const you = makePlayer(spots[0].x, spots[0].y, true, custom.name || "You", custom.color);
-  you.accessory = custom.accessory; you.img = custom.img || null; you.cls = custom.cls; players.push(you);
+  you.accessory = custom.accessory; you.img = custom.img || null; you.cls = custom.cls; you.wins = loadWins(); players.push(you);
   for (let i = 1; i < CFG.players; i++) {
     const s = spots[i] || {x:800,y:560};
     const b = makePlayer(s.x, s.y, false, "Bot " + (i+1), pick(BOT_COLORS));
@@ -744,13 +757,8 @@ function doorInWay(p){
 // ============================================================
 function humanIntent(){
   const mv=readMoveKeys();
-  return { dx:mv.dx, dy:mv.dy, moving:mv.moving, dash:tapDash, door:tapDoor, abil:tapAbil, melee:tapMelee };
+  return { dx:mv.dx, dy:mv.dy, moving:mv.moving, dash:tapDash, door:tapDoor, abil:tapAbil };
 }
-// is there a stealable carrier within melee reach? (bots + a shared helper)
-function meleeTarget(p){ if(p.isIt||p.role==="interference"||p.meleeCdT>0) return false;
-  for (const q of players){ if(q===p||q.role==="interference"||q.isIt||q.immunity>0) continue;
-    if (q.carrying && dist(p,q)<CFG.meleeRange && !losBlocked(p,q)) return true; }
-  return false; }
 // light bot use of the class ability (runners only; abilities are disabled while IT)
 function aiAbility(p, it, dt){
   if (p.abilCdT>0 || match.phase==="grace") return false;
@@ -811,7 +819,7 @@ function aiIntent(p, dt){
     const near = it && dist(p,it)<190;
     let dash=false; if (near && p.aiDashT<=0){ dash=true; p.aiDashT=0.9+Math.random(); }  // burst away
     const door = near && p.doorCdT<=0 && Math.random()<1.2*dt;   // slam a door to juke
-    return { dx:s.dx, dy:s.dy, moving:true, dash, door, abil:aiAbility(p,it,dt), melee:meleeTarget(p) };
+    return { dx:s.dx, dy:s.dy, moving:true, dash, door, abil:aiAbility(p,it,dt) };
   }
   // ROAM: carrying a core -> run it to the nearest bank; otherwise go grab the nearest loose core
   const objective = p.carrying ? nearestBank(p) : nearestCore(p);
@@ -823,7 +831,7 @@ function aiIntent(p, dt){
   const close = dist(p,p.aiTarget)<130;
   const dir = close ? steerAvoid(p, p.aiTarget.x-p.x, p.aiTarget.y-p.y, CFG.aiProbe) : pathTo(p, p.aiTarget.x, p.aiTarget.y, dt);
   const door = !!doorInWay(p) && p.doorCdT<=0;   // open a closed door blocking the route (bots don't slam while roaming)
-  return { dx:dir.dx, dy:dir.dy, moving:true, dash:false, door, abil:aiAbility(p,it,dt), melee:meleeTarget(p) };
+  return { dx:dir.dx, dy:dir.dy, moving:true, dash:false, door, abil:aiAbility(p,it,dt) };
 }
 
 // ============================================================
@@ -1026,25 +1034,27 @@ function useAbility(p){
     if (p.human||earshot(p.x,p.y)) sfx("doorOpen");
   }
 }
-// MELEE STEAL — every runner's universal close-range bump (F). Knocks the core loose from the nearest
-// carrier in reach (toward you) and shoves+stuns them briefly. Disabled while IT / ghost / stunned.
-function meleeSteal(p){
-  if (p.isIt || p.role==="interference" || p.meleeCdT>0 || p.stun>0 || p.breakDoor) return;
-  p.meleeCdT=CFG.meleeCd;
-  let best=null, bestScore=1e9;
-  for (const q of players){ if (q===p || q.role==="interference" || q.immunity>0) continue;
-    const d=dist(p,q); if (d>CFG.meleeRange+CFG.radius || losBlocked(p,q)) continue;
-    const sc = d - (q.carrying?1000:0);                 // strongly prefer an actual carrier
-    if (sc<bestScore){ bestScore=sc; best=q; } }
-  addShake(3); spawnRing(p.x,p.y,"#ffe0a0",CFG.meleeRange);
-  if (p.human||earshot(p.x,p.y)) sfx(best?"tag":"dash");
-  if (!best) return;                                     // whiff (nothing in reach)
-  const ang=Math.atan2(best.y-p.y,best.x-p.x), had=!!best.carrying;
-  best.vx=Math.cos(ang)*CFG.meleeKnock; best.vy=Math.sin(ang)*CFG.meleeKnock; best.stun=Math.max(best.stun,CFG.meleeStun);
-  if (had){ const cr=best.carrying; dropCore(best);      // knock the core loose, land it back toward the stealer
-    cr.x=clamp(best.x-Math.cos(ang)*26, 30, WORLD_W-30); cr.y=clamp(best.y-Math.sin(ang)*26, 30, WORLD_H-30); }
-  spawnBurst(best.x,best.y,"#ffce6a",12,190,0.42);
-  feed(p.name+(had?" knocked the core loose from "+best.name:" bumped "+best.name));
+// COLLISION STEAL — runs once per frame (host/single). If a moving non-IT runner overlaps a core
+// carrier, the carrier fumbles it and the core pops out along the HITTER's travel direction (ahead of
+// them). Single-target + a brief immunity, so no crowd-spam and no chained knock-arounds.
+function checkSteals(){
+  for (const p of players){
+    if (p.isIt || p.role==="interference" || p.carrying || p.stun>0 || p.culledAt>=0) continue;
+    if (p.speed < CFG.stealMinSpeed) continue;                 // must actually be moving into them (a check, not a nudge)
+    for (const q of players){
+      if (q===p || !q.carrying || q.isIt || q.role==="interference" || q.immunity>0) continue;
+      if (dist(p,q) > CFG.stealDist+CFG.radius) continue;
+      // pop the core out in the hitter's direction of travel (or facing if nearly still)
+      const sp=Math.hypot(p.vx,p.vy)||1, dx=(sp>40?p.vx/sp:Math.cos(p.heading)), dy=(sp>40?p.vy/sp:Math.sin(p.heading));
+      const cr=q.carrying; dropCore(q);
+      cr.x=clamp(q.x+dx*CFG.stealPop, 30, WORLD_W-30); cr.y=clamp(q.y+dy*CFG.stealPop, 30, WORLD_H-30);
+      q.immunity=Math.max(q.immunity, CFG.stealImmune);        // brief grace so it can't be re-stolen instantly
+      spawnBurst(q.x,q.y,"#ffce6a",10,170,0.4); addShake(2);
+      if (p.human||q.human||earshot(q.x,q.y)) sfx("tag");
+      feed(p.name+" knocked the core loose from "+q.name);
+      break;                                                   // one steal per hitter per frame
+    }
+  }
 }
 
 // ============================================================
@@ -1092,6 +1102,14 @@ function makeBanks(){
     banks.push({ x:chosen.x, y:chosen.y });
   }
   return banks;
+}
+// move ONE bank to a fresh open spot — called when a core is deposited into it (no camping a bank)
+function relocateBank(b){
+  let q=null;
+  for (let tries=0;tries<24;tries++){ q=randOpenPoint();
+    let ok=true; for (const o of match.banks){ if(o!==b && dist(q,o)<CFG.bankSpread){ ok=false; break; } }
+    if (ok) break; }
+  if (q){ b.x=q.x; b.y=q.y; }
 }
 // on each cull: shuffle the banks and re-scatter the loose cores (carried cores stay with their carrier)
 function relocateObjectives(){
@@ -1146,7 +1164,9 @@ function updateCores(dt){
           spawnRing(b.x,b.y,"#8fe0ff",CFG.bankRadius+18); spawnBurst(b.x,b.y,"#bfe9ff",16,240,0.5); addShake(4);
           if (h.human||earshot(b.x,b.y)) sfx("drain");
           feed(h.name+" banked +"+Math.round(gained));
-          c.live=false; c.cd=CFG.coreRespawn; c.holder=null; c.value=0; h.carrying=null; break;
+          c.live=false; c.cd=CFG.coreRespawn; c.holder=null; c.value=0; h.carrying=null;
+          relocateBank(b);                                 // the circle jumps to a new spot after a deposit
+          break;
         }
       }
     } else {
@@ -1240,6 +1260,7 @@ function hostGame(){
         conn.send({t:"welcome", slot, ok: slot>=0});
         if (slot<0){ try{conn.close();}catch(e){} } else netCount(); }
       else if (d && d.t==="input" && conn._slot>=0){ net.inputs[conn._slot]=d.in; }
+      else if (d && d.t==="wins" && conn._slot>=0 && players[conn._slot]){ players[conn._slot].wins=d.n|0; }  // client won -> everyone sees the star
     });
     conn.on("close", ()=>{ freeRemoteSlot(conn); });
     conn.on("error", ()=>{ freeRemoteSlot(conn); });
@@ -1254,7 +1275,7 @@ function assignRemoteSlot(conn, hello){
   return -1;   // game full
 }
 function applyRemote(p, conn, i){ const h=conn._hello||{}; p.remote=true; p.human=false; p.conn=conn; p.slot=i;
-  p.name=(h.name||"Player").slice(0,14); p.color=h.color||p.color; p.cls=h.cls||p.cls; p.accessory=h.accessory||"none"; conn._slot=i; }
+  p.name=(h.name||"Player").slice(0,14); p.color=h.color||p.color; p.cls=h.cls||p.cls; p.accessory=h.accessory||"none"; p.wins=h.wins||0; conn._slot=i; }
 // after a reset()/restart, re-bind connected clients to their player slots (reset rebuilds the array as bots)
 function reassignRemotes(){ if (net.mode!=="host") return;
   net.conns.forEach((conn,idx)=>{ const i=(conn._slot>0 && conn._slot<players.length)?conn._slot:(idx+1);
@@ -1272,7 +1293,7 @@ function joinGame(){
   net.peer=new Peer(undefined,{debug:1});
   net.peer.on("open", ()=>{
     const conn=net.peer.connect(code,{reliable:true}); net.conns=[conn];
-    conn.on("open", ()=>{ conn.send({t:"hello", name:(document.getElementById("pname").value||"Player"), color:custom.color, cls:custom.cls, accessory:custom.accessory}); });
+    conn.on("open", ()=>{ conn.send({t:"hello", name:(document.getElementById("pname").value||"Player"), color:custom.color, cls:custom.cls, accessory:custom.accessory, wins:loadWins()}); });
     conn.on("data", d=>{
       if (d && d.t==="welcome"){ if(!d.ok){ setNet("game is full — ask the host for a slot","warn"); netTeardown(); return; }
         net.selfSlot=d.slot; net.waiting=true;
@@ -1292,13 +1313,14 @@ function netSnapshot(){
     ann: match.announce?{text:match.announce.text,sub:match.announce.sub,t:match.announce.t,max:match.announce.max,col:match.announce.col}:null,
     feed: match.feed.map(f=>({text:f.text,t:f.t})),
     banks: match.banks.map(b=>({x:b.x,y:b.y})),
+    res: match.results ? match.results.map(p=>({nm:p.name,pl:p.place,sc:Math.round(p.score),ro:p.role,idx:players.indexOf(p)})) : null,
     doors: match.doors.map(d=>d.open?1:0),
     haz: match.hazards.map(h=>({x:h.x,y:h.y,w:h.w,h:h.h,life:h.life,maxLife:h.maxLife,block:!!h.block,cage:!!h.cage,col:h.col||null})),
     cores: match.cores.map(c=>({x:c.x,y:c.y,value:c.value,live:c.live,ho:c.holder?players.indexOf(c.holder):-1})),
     ps: players.map(p=>({ x:+p.x.toFixed(1),y:+p.y.toFixed(1),h:+p.heading.toFixed(2),a:+p.aimAng.toFixed(2),
       it:p.isIt?1:0,ro:p.role,cl:p.cls,co:p.color,nm:p.name,ac:p.accessory,sc:Math.round(p.score),rk:p.rank,
       st:+p.stun.toFixed(2),im:+p.immunity.toFixed(2),sh:+p.shoveT.toFixed(2),sa:+p.shoveAng.toFixed(2),bl:+p.blinkT.toFixed(2),
-      dc:p.dashCharges,cd:+p.abilCdT.toFixed(2),bc:p.blockCharges,br:+p.blockRegenT.toFixed(1),ca:p.carrying?1:0,cv:p.carrying?+p.carrying.value.toFixed(1):0,am:p.aiming?1:0 })) };
+      dc:p.dashCharges,cd:+p.abilCdT.toFixed(2),bc:p.blockCharges,br:+p.blockRegenT.toFixed(1),ca:p.carrying?1:0,cv:p.carrying?+p.carrying.value.toFixed(1):0,am:p.aiming?1:0,w:p.wins||0 })) };
 }
 // ---- client: apply a snapshot to local state, then move MY slot to index 0 (camera/fog follow me) ----
 function netApply(s){
@@ -1306,6 +1328,7 @@ function netApply(s){
   match.announce = s.ann?{text:s.ann.text,sub:s.ann.sub,t:s.ann.t,max:s.ann.max,col:s.ann.col}:null;
   match.feed = s.feed.map(f=>({text:f.text,t:f.t}));
   match.banks = s.banks.map(b=>({x:b.x,y:b.y}));
+  match.results = s.res ? s.res.map(r=>({name:r.nm,place:r.pl,score:r.sc,role:r.ro,human:r.idx===net.selfSlot})) : null;
   if (match.doors) match.doors.forEach((d,i)=>{ d.open=!!s.doors[i]; });
   match.hazards = s.haz.map(h=>({x:h.x,y:h.y,w:h.w,h:h.h,life:h.life,maxLife:h.maxLife,block:h.block,cage:h.cage,col:h.col,noLos:h.cage}));
   while (players.length<s.ps.length) players.push(makePlayer(0,0,false,"",""));
@@ -1313,18 +1336,18 @@ function netApply(s){
   s.ps.forEach((sp,i)=>{ let p=players[i]; if(!p){p=makePlayer(0,0,false,"","");players[i]=p;}
     p.x=sp.x;p.y=sp.y;p.heading=sp.h;p.aimAng=sp.a;p.isIt=!!sp.it;p.role=sp.ro;p.cls=sp.cl;p.color=sp.co;p.name=sp.nm;p.accessory=sp.ac;
     p.score=sp.sc;p.rank=sp.rk;p.stun=sp.st;p.immunity=sp.im;p.shoveT=sp.sh;p.shoveAng=sp.sa;p.blinkT=sp.bl;
-    p.dashCharges=sp.dc;p.abilCdT=sp.cd;p.blockCharges=sp.bc;p.blockRegenT=sp.br;p.aiming=!!sp.am;p.human=false;
+    p.dashCharges=sp.dc;p.abilCdT=sp.cd;p.blockCharges=sp.bc;p.blockRegenT=sp.br;p.aiming=!!sp.am;p.human=false;p.wins=sp.w||0;
     p.carrying = sp.ca?{value:sp.cv}:null; });
   match.cores = s.cores.map(c=>({x:c.x,y:c.y,value:c.value,live:c.live,holder:c.ho>=0?players[c.ho]:null,cd:0,grabCd:0,lastHolder:null}));
   itIndex = s.it;
   const my=net.selfSlot;
   if (my>0 && my<players.length){ const t=players[0]; players[0]=players[my]; players[my]=t;
     if(itIndex===0) itIndex=my; else if(itIndex===my) itIndex=0; }
-  if (players[0]) players[0].human=true;   // index 0 is ME on this machine (drives "you" HUD / camera)
+  if (players[0]){ players[0].human=true; players[0].wins=loadWins(); }   // index 0 is ME (drives "you" HUD/camera + my true win count)
 }
 function netClientInput(){ const mv=readMoveKeys(); const you=players[0]; let aim=you?you.aimAng:0;
   if (you){ const m=mouseWorld(); aim=Math.atan2(m.y-you.y,m.x-you.x); }
-  return { dx:mv.dx,dy:mv.dy,moving:mv.moving, dash:tapDash,door:tapDoor,abil:tapAbil, melee:tapMelee, aim, aiming: abilHeld?1:0 }; }
+  return { dx:mv.dx,dy:mv.dy,moving:mv.moving, dash:tapDash,door:tapDoor,abil:tapAbil, aim, aiming: abilHeld?1:0 }; }
 
 function frame(now){
   let dt=(now-last)/1000; last=now; dt=Math.max(0,Math.min(dt,0.033)); // clamp: never negative, never a huge catch-up step
@@ -1338,9 +1361,9 @@ function frame(now){
     const cd = match.doors ? match.doors.filter(d=>!d.open) : [];
     obstacles = walls.concat(cd).concat(match.hazards||[]);
     losObstacles = walls.concat(cd).concat((match.hazards||[]).filter(h=>!h.noLos));
-    updateEffects(dt); updateTerror(dt);
+    updateEffects(dt); updateTerror(dt); checkWinCredit();
     if (net.waiting || !net.lastSnap) drawNetWaiting(); else render();
-    tapDash=false; tapDoor=false; tapAbil=false; tapMelee=false;
+    tapDash=false; tapDoor=false; tapAbil=false;
     requestAnimationFrame(frame); return;
   }
   const closedDoors = match.doors ? match.doors.filter(d=>!d.open) : [];
@@ -1357,11 +1380,9 @@ function frame(now){
     else p.itMult=1;
     tickAbility(p,dt);                         // cooldowns + strike/blink timers
     // INTENT: local human (index 0) types; a REMOTE player's intent arrives over the net; bots use AI.
-    p.meleeCdT=Math.max(0,p.meleeCdT-dt);
     const ni = p.remote ? net.inputs[p.slot] : null;
-    const intent = p.remote ? (ni?{dx:ni.dx,dy:ni.dy,moving:ni.moving,dash:ni.dash,door:ni.door,abil:ni.abil,melee:ni.melee}:{dx:0,dy:0,moving:false,dash:false,door:false,abil:false,melee:false})
+    const intent = p.remote ? (ni?{dx:ni.dx,dy:ni.dy,moving:ni.moving,dash:ni.dash,door:ni.door,abil:ni.abil}:{dx:0,dy:0,moving:false,dash:false,door:false,abil:false})
                             : (p.human?humanIntent():aiIntent(p,dt));
-    if (intent.melee) meleeSteal(p);           // universal close-range core-knock (everyone, non-IT)
     if (p.human && !p.remote && p.cls==="striker" && !p.isIt && p.role!=="interference"){
       // Striker (local): HOLD the ability to aim (track cursor), RELEASE to fire. Aim is INDEPENDENT of facing.
       if (tapAbil && p.abilCdT<=0 && p.stun<=0 && !p.breakDoor) p.aiming=true;   // press starts the aim
@@ -1373,7 +1394,7 @@ function frame(now){
       if (p.aiming && ni){ p.aimAng=ni.aim; }
       if (p.aiming && ni && !ni.aiming){ p.aiming=false; useAbility(p); }
     } else if (intent.abil) useAbility(p);     // other classes / bots: fire on press
-    if (ni){ ni.dash=false; ni.door=false; ni.abil=false; ni.melee=false; }   // consume the remote taps so one press = one action
+    if (ni){ ni.dash=false; ni.door=false; ni.abil=false; }   // consume the remote taps so one press = one action
 
     p.doorCdT=Math.max(0,p.doorCdT-dt);
     p.doorSlowT=Math.max(0,p.doorSlowT-dt);
@@ -1386,15 +1407,17 @@ function frame(now){
     if (p.speed>150 && p.trailT<=0){ p.trail.push({x:p.x,y:p.y,life:0.34,max:0.34}); p.trailT=0.028; }
     for (let i=p.trail.length-1;i>=0;i--){ p.trail[i].life-=dt; if (p.trail[i].life<=0) p.trail.splice(i,1); }
   }
+  if (scoring) checkSteals();                 // run-into-a-carrier steal (after movement, so positions are current)
   updateEffects(dt);
   updateTerror(dt);
   if (match.phase!=="over") checkTag();
+  checkWinCredit();
   render();
   // HOST: broadcast a world snapshot to every client at snapHz
   if (net.mode==="host" && net.conns.length){ net.snapT+=dt;
     if (net.snapT>=1/net.snapHz){ net.snapT=0; const snap=netSnapshot();
       for (const c of net.conns){ if (c.open){ try{ c.send(snap); }catch(e){} } } } }
-  tapDash=false; tapDoor=false; tapAbil=false; tapMelee=false;   // consume human taps for this frame
+  tapDash=false; tapDoor=false; tapAbil=false;   // consume human taps for this frame
   requestAnimationFrame(frame);
 }
 // client "waiting for host" screen (shown until the first snapshot lands)
@@ -2047,6 +2070,10 @@ function drawPlayerLabels3D(){
     if (p.rank){ ctx.fillStyle=rankColor(p.rank); ctx.font="bold 13px monospace"; ctx.fillText(ordinal(p.rank),s.x,s.y-13); }
     ctx.fillStyle=p.human?"#eaffff":(p.isIt?"rgba(255,150,150,0.9)":"rgba(200,220,240,0.85)");
     ctx.font=p.human?"bold 12px monospace":"11px monospace"; ctx.fillText(p.name.slice(0,10),s.x,s.y);
+    if (p.wins>0){ const wy=s.y-31;    // gold WIN STAR with the count inside — a persistent brag
+      ctx.font="26px monospace"; ctx.fillStyle="#ffcf3a"; ctx.shadowColor="rgba(255,190,40,0.9)"; ctx.shadowBlur=8;
+      ctx.fillText("★",s.x,wy); ctx.shadowBlur=0;
+      ctx.fillStyle="#5a3d00"; ctx.font="bold 11px monospace"; ctx.textBaseline="middle"; ctx.fillText(String(p.wins),s.x,wy-9); ctx.textBaseline="alphabetic"; }
     if (p.carrying){ const frac=clamp(p.carrying.value/CFG.carryGrowCap,0,1), full=frac>=0.999;
       if (p.human){
         // YOUR own core meter — big, unmistakable, so you can read the fill and the moment it caps.
@@ -2410,8 +2437,6 @@ function drawSelfStatus(){
     chips.push({t:"DASH "+"●".repeat(you.dashCharges)+"○".repeat(Math.max(0,CFG.dashCharges-you.dashCharges)), c:"#7fe0ff"});
     const c=clsById(you.cls), ready=you.abilCdT<=0&&!you.isIt;
     chips.push({t:c.abil+(you.isIt?" (IT)":ready?" READY":" "+you.abilCdT.toFixed(1)+"s"), c:ready?c.accent:"#5c6c7c"});
-    if (!you.isIt){ const mReady=you.meleeCdT<=0;   // universal F-steal readiness
-      chips.push({t:"STEAL"+(mReady?"":" "+you.meleeCdT.toFixed(1)+"s"), c:mReady?"#ffce6a":"#5c6c7c"}); }
   }
   if (you.carrying){ const full=you.carrying.value>=CFG.carryGrowCap-0.01, amt=Math.round(CFG.carryValue+you.carrying.value);
     chips.push({t:full?("CORE FULL +"+amt+" — BANK IT!"):("CARRYING +"+amt), c:full?"#fff2a0":"#ffd678"}); }
@@ -2438,6 +2463,7 @@ function drawAnnounce(){
   ctx.restore(); ctx.globalAlpha=1;
 }
 function drawResults(){
+  if (!match.results){ return; }   // guard: phase can flip to "over" a frame before results land (e.g. a client's snapshot)
   ctx.fillStyle="rgba(8,11,16,0.88)"; ctx.fillRect(0,0,VIEW_W,VIEW_H);
   ctx.textAlign="center"; ctx.fillStyle="#7fd1ff"; ctx.font="bold 26px monospace"; ctx.fillText("RESULTS",VIEW_W/2,118);
   ctx.font="12px monospace"; ctx.fillStyle="#8aa0b4"; ctx.fillText("finalists up top · winner took the Showdown",VIEW_W/2,138);
@@ -2460,7 +2486,7 @@ function updateHudText(){
   const cc=clsById(you.cls);
   const abilHint = you.cls==="striker" ? "hold <span class='k'>R-click</span> aim · release "+cc.abil : "<span class='k'>R-click</span> "+cc.abil;
   tipsEl.innerHTML="<span style='color:"+cc.accent+"'>"+cc.name+"</span> · <span class='k'>WASD</span> move · <span class='k'>Space</span> dash · "+
-    abilHint+" · <span class='k'>F</span> steal · <span class='k'>L-click</span> door · <span class='k'>M</span>/<span class='k'>N</span> audio";
+    abilHint+" · <span class='k'>L-click</span> door · run into carriers to steal · <span class='k'>M</span>/<span class='k'>N</span> audio";
 }
 
 // ============================================================
@@ -2516,7 +2542,7 @@ function initMenuGL(){
     scene.add(new THREE.AmbientLight(0x445066,0.5));
     const key=new THREE.DirectionalLight(0xffffff,1.05); key.position.set(70,130,110); scene.add(key);
     const rim=new THREE.DirectionalLight(0x6ea0ff,0.75); rim.position.set(-90,50,-70); scene.add(rim);
-    const cam=new THREE.PerspectiveCamera(36,1,1,2000); cam.position.set(0,50,142); cam.lookAt(0,25,0);
+    const cam=new THREE.PerspectiveCamera(36,1,1,2000); cam.position.set(0,44,100); cam.lookAt(0,27,0);   // pulled in so the model fills more of the tile
     const holder=new THREE.Group(); scene.add(holder);
     menuGL={ cv, rnd, scene, cam, holder, cls:null, rig:null };
   } catch(e){ menuGL=false; }   // false = tried and failed; never retry
@@ -2539,15 +2565,13 @@ function menuPreview3D(){
 }
 function drawPreview(){
   pctx.clearRect(0,0,pcv.width,pcv.height);
-  const x=pcv.width/2, y=pcv.height/2+8, r=24, h=Math.PI/2;
-  pctx.fillStyle="rgba(0,0,0,0.35)"; pctx.beginPath();
-  pctx.ellipse(x,y+r*0.9,r*0.95,r*0.34,0,0,Math.PI*2); pctx.fill();   // contact shadow under the model
-  const hasImg=custom.img && custom.img.complete && custom.img.naturalWidth;
-  if (!hasImg && menuPreview3D()){
+  const x=pcv.width/2, y=pcv.height/2+8, r=32, h=Math.PI/2;
+  if (menuPreview3D()){
     pctx.drawImage(menuGL.cv, 0, 0, pcv.width, pcv.height);
-  } else {
-    drawUnit(pctx,x,y,r,h,{cls:custom.cls,isIt:false,color:custom.color,img:custom.img});
-    drawAccessory(pctx,x,y-CFG.bodyH,r,h,custom.accessory);
+  } else {   // 2D fallback (WebGL unavailable)
+    pctx.fillStyle="rgba(0,0,0,0.35)"; pctx.beginPath();
+    pctx.ellipse(x,y+r*0.9,r*0.95,r*0.34,0,0,Math.PI*2); pctx.fill();
+    drawUnit(pctx,x,y,r,h,{cls:custom.cls,isIt:false,color:custom.color,img:null});
   }
 }
 // keep the preview spinning while the menu is up (stops once a match starts)
@@ -2561,6 +2585,11 @@ function startMenuLoop(){ if (!_menuRAF) _menuRAF=requestAnimationFrame(menuLoop
   if (vs){ vs.value=Math.round(musVol*100);
     vs.oninput=()=>{ initAudio(); setMusVol((+vs.value||0)/100); }; }
   refreshAudioUI();
+  // ANY first interaction (incl. clicking menu buttons/swatches, which don't hit the canvas) unlocks
+  // audio + starts the lobby track — this is why menu music sometimes never kicked in.
+  const kick=()=>{ initAudio(); if(!started && musOn) startMusic("menu"); };
+  document.addEventListener("pointerdown", kick);
+  document.addEventListener("keydown", kick);
 })();
 (function buildMenu(){
   // class picker — the identity choice (drives the chassis + the Q ability)
@@ -2582,34 +2611,6 @@ function startMenuLoop(){ if (!_menuRAF) _menuRAF=requestAnimationFrame(menuLoop
       sw.querySelectorAll(".sw").forEach(e=>e.classList.remove("sel"));
       d.classList.add("sel"); drawPreview(); };
     sw.appendChild(d); });
-  // avatar photo upload (local FileReader -> Image; nothing leaves the machine)
-  const up=document.getElementById("avatarUp");
-  up.addEventListener("change", e=>{
-    const f=e.target.files && e.target.files[0]; if(!f) return;
-    const rd=new FileReader();
-    rd.onload=()=>{
-      const im=new Image();
-      im.onload=()=>{
-        // downscale the (often multi-MB phone) photo to a small tile so preview + in-game draw are instant
-        const max=160, sc=Math.min(1, max/Math.max(im.naturalWidth,im.naturalHeight));
-        const cw=Math.max(1,Math.round(im.naturalWidth*sc)), ch=Math.max(1,Math.round(im.naturalHeight*sc));
-        const oc=document.createElement("canvas"); oc.width=cw; oc.height=ch;
-        oc.getContext("2d").drawImage(im,0,0,cw,ch);
-        const small=new Image();
-        small.onload=()=>{ custom.img=small; drawPreview(); };
-        small.src=oc.toDataURL("image/png"); custom.imgSrc=small.src;
-      };
-      im.src=rd.result;
-    };
-    rd.readAsDataURL(f);
-  });
-  document.getElementById("avatarClear").onclick=()=>{ custom.img=null; custom.imgSrc=null; up.value=""; drawPreview(); };
-  const ac=document.getElementById("accs");
-  ACCESSORIES.forEach(a=>{ const b=document.createElement("button");
-    b.className="acc"+(a===custom.accessory?" sel":""); b.textContent=a;
-    b.onclick=()=>{ custom.accessory=a; ac.querySelectorAll(".acc").forEach(e=>e.classList.remove("sel"));
-      b.classList.add("sel"); drawPreview(); };
-    ac.appendChild(b); });
   const nameEl=document.getElementById("pname");
   nameEl.value=custom.name;
   nameEl.addEventListener("keydown", e=>{ if(e.key==="Enter") startGame(); });
