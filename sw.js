@@ -1,5 +1,5 @@
 /* Minimal offline cache. Bump CACHE to force an update after edits. */
-const CACHE = "board-v6";
+const CACHE = "board-v7";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.png"];
 
 self.addEventListener("install", (e) => {
@@ -14,6 +14,8 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   /* Never cache Firebase/Firestore traffic — always hit the network for live sync. */
   if (url.hostname.includes("googleapis.com") || url.hostname.includes("gstatic.com") || url.hostname.includes("firebase")) return;
+  /* Never touch the TAG game — always serve it fresh from the network (the SW cache was corrupting three.js). */
+  if (url.pathname.includes("/tag/")) return;
   e.respondWith(
     caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
       const copy = res.clone();
