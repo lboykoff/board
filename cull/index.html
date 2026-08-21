@@ -1,0 +1,2860 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>THE CULL</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0e1116; color: #cfe3f5;
+    font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  #wrap { position: fixed; inset: 0; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: #05070b; z-index: 0; }
+  #c  { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: transparent; z-index: 1; }
+  #hud { position: fixed; left: 12px; bottom: 10px; right: 12px; font-size: 13px; line-height: 1.5;
+    pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+  #hud b { color: #7fd1ff; }
+  .k { color: #ffd479; }
+  #tips { color: #8aa0b4; font-size: 12px; }
+  #tune { position: fixed; top: 10px; right: 10px; width: 250px; background: #131a24;
+    border: 1px solid #26313f; border-radius: 6px; padding: 10px; font-size: 12px; display: none; max-height: 92vh; overflow:auto; }
+  #tune.show { display: block; }
+  #tune label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
+  #tune input[type=range] { width: 120px; }
+  #tune h4 { margin: 6px 0 2px; color: #7fd1ff; }
+
+  /* ---- start / customize screen ---- */
+  #menu { position: fixed; inset: 0; background: radial-gradient(circle at 50% 35%, #141c28, #0a0d12 70%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 50; }
+  #menu.hide { display: none; }
+  #menu h1 { font-size: 40px; letter-spacing: 10px; margin: 0; color: #eaf2ff; text-shadow: 0 0 18px rgba(120,200,255,0.35); }
+  #menu .sub { color: #8aa0b4; font-size: 13px; margin-top: -8px; }
+  #menu .card { background: #131a24; border: 1px solid #26313f; border-radius: 10px; padding: 18px 22px;
+    display: flex; flex-direction: column; gap: 14px; width: 420px; max-width: 92vw; }
+  #menu .row { display: flex; align-items: center; gap: 12px; }
+  #menu .row > span.lbl { color: #7fd1ff; font-size: 12px; width: 74px; }
+  #menu #pcv { background: #0a0d12; border: 1px solid #223; border-radius: 8px; }
+  #menu input[type=text] { flex: 1; background: #0a0d12; border: 1px solid #2a3644; border-radius: 6px;
+    color: #eaf2ff; padding: 8px 10px; font-family: inherit; font-size: 14px; }
+  #menu .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  #menu .sw { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  #menu .sw.sel { border-color: #eaf2ff; box-shadow: 0 0 8px rgba(255,255,255,0.4); }
+  #menu .classes { display: flex; gap: 8px; flex: 1; }
+  #menu .cls { flex: 1; background: #0a0d12; border: 1px solid #2a3644; border-radius: 8px; color: #cfe3f5;
+    padding: 8px 6px; cursor: pointer; font-family: inherit; text-align: center; line-height: 1.25; }
+  #menu .cls b { display: block; font-size: 13px; }
+  #menu .cls small { font-size: 10px; color: #8aa0b4; }
+  #menu .cls.sel { border-width: 2px; padding: 7px 5px; }
+  #menu .clsrow { margin-top: -8px; }
+  #menu .clsinfo { flex: 1; font-size: 11px; color: #9fb3c8; min-height: 14px; }
+  #menu .accs { display: flex; flex-wrap: wrap; gap: 6px; }
+  #menu .acc { background: #0a0d12; border: 1px solid #2a3644; border-radius: 6px; color: #cfe3f5;
+    padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  #menu .acc.sel { border-color: #7fd1ff; color: #7fd1ff; }
+  #menu #play { background: #1f6feb; border: none; border-radius: 8px; color: #fff; font-size: 16px;
+    padding: 12px; cursor: pointer; font-family: inherit; letter-spacing: 1px; }
+  #menu #play:hover { background: #2f7ffb; }
+  #menu .hint { color: #6f8398; font-size: 11px; text-align: center; }
+  /* multiplayer lobby */
+  #menu .mprow { display: flex; gap: 8px; }
+  #menu .mpbtn { flex: 1; background: #10202e; border: 1px solid #2a4a63; border-radius: 8px; color: #9fd6ff;
+    font-size: 13px; padding: 9px; cursor: pointer; font-family: inherit; }
+  #menu .mpbtn:hover { background: #16324a; }
+  #menu .netbox { color: #b9d4ea; font-size: 12px; text-align: center; min-height: 0; line-height: 1.5; }
+  #menu .netbox code { color: #ffd479; font-size: 15px; letter-spacing: 1px; background: #0a0d12; padding: 2px 8px; border-radius: 5px; }
+  #menu .netbox .ok { color: #7fe6a6; } #menu .netbox .warn { color: #ffb060; }
+  /* audio controls — always visible + clickable, over the menu and the game */
+  #audioctl { position: fixed; left: 12px; top: 148px; z-index: 60; display: flex; align-items: center; gap: 8px;
+    background: rgba(19,26,36,0.82); border: 1px solid #26313f; border-radius: 8px; padding: 6px 10px; }
+  #audioctl #muteBtn { background: none; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 0; }
+  #audioctl #volSlider { width: 90px; cursor: pointer; accent-color: #7fd1ff; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="gl" width="960" height="600"></canvas>
+  <canvas id="c" width="960" height="600"></canvas>
+  <div id="hud">
+    <div id="status"></div>
+    <div id="tips"></div>
+  </div>
+</div>
+<div id="tune"></div>
+<div id="audioctl">
+  <button id="muteBtn" title="Mute all (M / N)">🔊</button>
+  <input id="volSlider" type="range" min="0" max="100" value="85" title="Music volume" />
+</div>
+
+<div id="menu">
+  <h1>THE CULL</h1>
+  <div class="sub">grab cores · bank them for points · don't get tagged holding one · most points wins</div>
+  <div class="sub" style="color:#8aa0b4">steal by running INTO a core carrier — it knocks the core loose for you to grab. (getting tagged, or a Striker's shove, drops it too.) win a match to earn a ⭐ on your model.</div>
+  <div class="card">
+    <div class="row">
+      <canvas id="pcv" width="118" height="118"></canvas>
+      <input type="text" id="pname" maxlength="14" placeholder="Your name" value="You" />
+    </div>
+    <div class="row"><span class="lbl">Class</span><div class="classes" id="classes"></div></div>
+    <div class="row clsrow"><span class="lbl"></span><div id="classInfo" class="clsinfo"></div></div>
+    <div class="row"><span class="lbl">Color</span><div class="swatches" id="swatches"></div></div>
+    <div class="row"><span class="lbl">Map</span><div class="classes" id="maps"></div></div>
+    <button id="play">PLAY (vs bots)</button>
+    <div class="mprow">
+      <button id="hostBtn" class="mpbtn">Host online game</button>
+      <button id="joinBtn" class="mpbtn">Join with code</button>
+    </div>
+    <div id="netbox" class="netbox"></div>
+    <div class="hint">WASD move · Space dash · R-click your class ability · L-click doors · <b style="color:#ffd479">run into a core carrier to knock it loose</b> · M/N audio · R restart · T tuning</div>
+  </div>
+</div>
+
+<script src="three.min.js"></script>
+<script src="peerjs.min.js"></script>
+<script>
+"use strict";
+
+// ============================================================
+// CONFIG — press T for live sliders
+// ============================================================
+const CFG = {
+  players:          6,
+
+  // movement — no stamina/sprint; the dash is the burst tool
+  runnerMaxSpeed:   220, runnerAccel: 2400,   // runners: snappier accel = tighter cornering
+  itMaxSpeed:       240, itAccel: 1700,        // IT: higher top speed, floatier
+  decel:            1500, radius: 15, bodyH: 15,   // bodyH = 2.5D extrusion height of a character
+  itEscalation:     0.02, // IT slowly gains a little top speed the longer it's stuck IT (anti-stalemate; not shown)
+
+  // dash — EVERYONE gets it (the fluid movement tech). 2 charges, regen over time.
+  // dashTurn = how fast you can STEER the dash mid-flight (rad/s) = the dodge skill. Runners get
+  // the full rate; IT curves its dash much less (itDashTurnMult) so a good juke actually shakes IT.
+  dashSpeed: 620, dashTime: 0.20, dashCharges: 3, dashRegen: 2.3, dashCd: 0.18, dashTurn: 18, itDashTurnMult: 0.45,
+
+  // tag — touch-based: IT tags on contact, no aim/no whiff
+  // tagStun is on the NEW IT: a real pause so the pass-off creates separation (hot-potato reset)
+  tagPad: 4, tagStun: 1.0, tagbackImmunity: 3.0,
+
+  // vision / fog of war
+  viewRadius:       380,  // how far a runner can see (bumped: more time to react to an incoming IT)
+  itViewRadius:     400,  // IT sees further
+  visRays:          150,  // ray count for the vision polygon (higher = crisper, costs more)
+  // terror radius (DBD-style): you sense IT through walls when it's near — heartbeat + red screen
+  // pulse that intensify as it closes. Warns you without revealing exactly where it is.
+  terrorRadius:     380,
+
+  wallH:            20,   // visual extrusion height of walls (px) — pure look, collision uses the footprint
+
+  // match flow
+  grace: 3.0, cullMarks: [50, 95, 135], showdownTime: 60,
+  itScoreBleed: 3.0,      // score/sec IT loses — being IT is bad (can't earn + bleeds), floored at 0
+
+  // CARRY-AND-BANK scoring: grab a loose core, run it to a bank to score. Carrying slows you and
+  // lights you up; getting tagged or shoved drops it into a loose scramble. IT can't carry or bank.
+  coreCount:   2,     // loose cores on the map at once (2, matching the 2 banks — less chaos)
+  coreRadius:  13,    // pickup body size
+  carrySlow:   0.80,  // speed multiplier while carrying a core (a real but not crippling tax)
+  carryValue:  10,    // base points banked per core
+  carryGrow:   5,     // + points per second held (greed: hold longer for more, risk the drop)
+  carryGrowCap:20,    // max held-bonus on top of carryValue
+  coreRespawn: 2.5,   // seconds a banked core stays gone before a fresh one appears elsewhere
+  coreBankBuffer: 220,// cores never spawn within this radius of a bank (no free grab-and-bank)
+  coreLoosePull: 999, // (reserved) — cores don't drift; they sit where dropped
+  bankCount:   2,     // bank drop-zones — placed at RANDOM open spots, and relocated on every cull
+  bankRadius:  50,    // stand-in radius to bank a carried core (instant on touch)
+  bankSpread:  520,   // min distance banks try to keep from each other when (re)placed
+  dropScatter: 34,    // how far a dropped core skitters from the fumble
+
+  // COLLISION STEAL — no button: just run INTO a core carrier and it pops loose. The core squirts out
+  // in the hitter's direction of travel (ahead of them) so a clean check pops the puck for you to grab.
+  // A brief immunity after a hit stops it re-triggering every frame / chaining through a crowd.
+  stealDist: 30, stealPop: 46, stealMinSpeed: 70, stealImmune: 0.55,
+  stealCd: 1.6,      // per-hitter cooldown after knocking a core loose — stops the instant back-and-forth ping-pong
+  grabGrace: 0.9,    // fresh grab can't be stolen for this long (you just picked it up — a beat to actually move)
+
+  // doors — runners open/close them freely to juke (DBD-pallet-style). IT can't toggle:
+  // IT must BREAK a closed door (a channel that stops it), which is what buys the runner distance.
+  doorCd: 0.4,          // per-runner cooldown between toggles
+  doorBreakTime: 0.75,  // seconds IT is stopped breaking a closed door before it opens
+  doorSlow: 0.6,        // brief IT speed multiplier right after breaking (extra escape window)
+
+  // interference (the "ghost" a culled player becomes) — phases through walls, FASTER than IT (330 vs 240),
+  // and drops temporary blocks to wall paths off. 2 block charges that recharge (indicator on the HUD).
+  interfSpeed: 330,
+  blockCharges: 2, blockLife: 10.0, blockRegen: 8.0, blockSize: 56,   // temp wall: 10s life, 2 charges, ~8s recharge each
+  beaconReveal: 4.0, beaconCd: 12.0,
+
+  // class abilities (Q) — first pass, disabled while IT
+  // striker: an AIMED shove (mouse-directed). The striker DOESN'T move — it knocks a rival in the
+  // cursor direction and pins them (long stun) so you can go take their circle/core. knock/decel ->
+  // ~190px of travel (~1.5 dashes); strikeStun keeps them planted while you close in.
+  strikeRange: 148, strikeCone: 0.58, strikeKnock: 760, strikeStun: 0.55, strikeCd: 5.0,
+  shovedLockout: 0.9,  // after being shoved you can't use your own ability for this long (no instant retaliation)
+  // bulwark: BUNKER — 4 energy walls snap up around you; only YOU can pass through them. Walls IT
+  // out (or traps it in) while you bank/escape. See-through, short-lived, real cooldown = a big moment.
+  cageLife: 2.0, cageRad: 56, cageThick: 14, cageCd: 8.0,
+  // warden: a PHASE DASH — blinks in the facing direction straight THROUGH walls, landing on the far
+  // side (or as far as it reaches in open space). Its identity = the only mover that ignores geometry.
+  blinkDist: 210, blinkStep: 6, blinkCd: 7.0,
+
+  // bot AI (limited awareness so it's fair + roams instead of camping)
+  aiSenseRadius: 340,  // how close IT must be for a runner-bot to notice it (its "fog")
+  aiItSense:     300,  // IT-bot spot range (needs LOS). MUST stay < viewRadius(380) so IT can never
+                       // act on you from beyond your own vision — that "dash out of the fog" feel is this being too high.
+  aiItReact:     0.28, // IT must SEE you continuously this long before it can lunge (kills corner-ambush bursts)
+  aiReaction:    0.28, // seconds a bot takes to react after spotting IT
+  aiFleeError:   0.45, // radians of wobble in a fleeing bot's path (makes it catchable)
+  aiProbe:       120,  // wall-avoidance look-ahead distance
+  aiStealSense:  330,  // how close a core carrier must be for a (non-carrying, not-fleeing) bot to HUNT it for a steal
+  aiHuntBias:    1.25, // hunt a carrier over grabbing a loose core when the carrier is within this * the core's distance
+};
+
+// ============================================================
+// WORLD (big) vs VIEW (camera viewport = canvas)
+// ============================================================
+let VIEW_W = 960, VIEW_H = 600;   // = canvas pixel size; recomputed to fill the window on resize
+const WORLD_W = 1600, WORLD_H = 1120;
+
+// ------------------------------------------------------------
+// MAPS — the host picks one on the start screen. Both share the same WORLD_W/H so the camera,
+// fog, nav-grid dims, and spawn logic are identical; only the wall + door layout differs.
+// Each map is { name, walls:[...], doors:[...] }. Doors are solid when closed (block move + sight),
+// a gap when open; toggle with the door key nearby. The border is baked into each map's walls.
+// ------------------------------------------------------------
+const BORDER = [
+  {x:0,y:0,w:WORLD_W,h:16},{x:0,y:WORLD_H-16,w:WORLD_W,h:16},
+  {x:0,y:0,w:16,h:WORLD_H},{x:WORLD_W-16,y:0,w:16,h:WORLD_H},
+];
+// tiny builders — H=horizontal bar, V=vertical bar, P=square pillar (top-left origin)
+function H(x,y,w){ return {x,y,w,h:16}; }
+function V(x,y,h){ return {x,y,w:16,h}; }
+function P(x,y,s){ return {x,y,w:s,h:s}; }
+// reflect a rect authored for the TOP-LEFT corner into any corner (mx=mirror x, my=mirror y). Shape
+// is preserved exactly, so a corner "jungle gym" authored once appears identical-but-mirrored in all 4.
+function refl(r,mx,my){ return { x: mx?WORLD_W-r.x-r.w:r.x, y: my?WORLD_H-r.y-r.h:r.y, w:r.w, h:r.h }; }
+function fourCorners(base){ const out=[];
+  for (const [mx,my] of [[false,false],[true,false],[false,true],[true,true]])
+    for (const r of base) out.push(refl(r,mx,my));
+  return out; }
+
+// MAP 1 — "ARENA": a central room with a door on every side (the hot loop), vertical flanking
+// barriers, mid pillars, OUTSKIRT gates on the outer ring, and an open "jungle-gym" LOOP in every
+// corner (an L wall + an offset pillar + a slam-door) you can circle to bait IT and drop a door on it.
+const ARENA_CORNER_W = [ H(150,210,120), V(150,210,190), P(250,300,56) ];   // open L + inner pillar
+const ARENA_CORNER_D = [ {x:270,y:210,w:70,h:16} ];                          // slam-door in the L's far arm
+const MAP_ARENA = {
+  name: "Arena", theme: "grid",
+  walls: [
+    ...BORDER,
+    // central room shell — doors fill the gaps on each side
+    {x:600,y:420,w:168,h:16},{x:832,y:420,w:168,h:16},   // top edge (gap x768..832)
+    {x:600,y:684,w:168,h:16},{x:832,y:684,w:168,h:16},   // bottom edge
+    {x:600,y:420,w:16,h:108},{x:600,y:592,w:16,h:108},   // left edge (gap y528..592)
+    {x:984,y:420,w:16,h:108},{x:984,y:592,w:16,h:108},   // right edge
+    {x:770,y:540,w:60,h:40},                              // inner pillar (360 juke)
+    // vertical flanking barriers, door in the middle third
+    {x:452,y:300,w:16,h:120},{x:452,y:540,w:16,h:160},
+    {x:1132,y:300,w:16,h:120},{x:1132,y:540,w:16,h:160},
+    // free-standing juke pillars (spread wide)
+    {x:360,y:540,w:48,h:48},{x:1192,y:540,w:48,h:48},
+    {x:790,y:236,w:48,h:48},{x:790,y:836,w:48,h:48},
+    {x:560,y:180,w:46,h:46},{x:994,y:180,w:46,h:46},
+    {x:560,y:894,w:46,h:46},{x:994,y:894,w:46,h:46},
+    // mid-lane breakers
+    {x:520,y:824,w:180,h:16},{x:900,y:280,w:180,h:16},
+    // OUTSKIRT GATES — slam-doors on the outer runways so the perimeter loops too, not just the center
+    {x:768,y:16,w:16,h:72},{x:768,y:160,w:16,h:50},        // top runway gate (door y88..160)
+    {x:768,y:910,w:16,h:50},{x:768,y:1032,w:16,h:72},      // bottom runway gate (door y960..1032)
+    {x:16,y:560,w:60,h:16},{x:160,y:560,w:50,h:16},        // left runway gate (door x76..148)
+    {x:1390,y:560,w:72,h:16},{x:1534,y:560,w:50,h:16},     // right runway gate (door x1462..1534)
+    ...fourCorners(ARENA_CORNER_W),                        // the four jungle-gym loops
+  ],
+  doors: [
+    {x:768,y:420,w:64,h:16},    // central room — top
+    {x:768,y:684,w:64,h:16},    // central room — bottom
+    {x:600,y:528,w:16,h:64},    // central room — left
+    {x:984,y:528,w:16,h:64},    // central room — right
+    {x:452,y:420,w:16,h:120},   // left flank
+    {x:1132,y:420,w:16,h:120},  // right flank
+    {x:768,y:88,w:16,h:72},     // top outskirt gate
+    {x:768,y:960,w:16,h:72},    // bottom outskirt gate
+    {x:76,y:560,w:72,h:16},     // left outskirt gate
+    {x:1462,y:560,w:72,h:16},   // right outskirt gate
+    ...fourCorners(ARENA_CORNER_D),   // one slam-door per corner loop
+  ],
+};
+// MAP 2 — "FOUNDRY": a totally different topology. A big central RING plaza (loop the core block,
+// four doored entries) instead of a room; sparse ASYMMETRIC mid cover (open, fast lanes — no outer
+// gates); and each corner is an enclosed 2-DOOR LOOP-ROOM (dart in one door, circle the pillar, out
+// the other, or slam a door behind you). Reads and plays nothing like the Arena.
+const FOUNDRY_CORNER_W = [ H(100,100,220), V(100,100,220), V(304,100,90), H(100,304,90), P(190,190,40) ];
+const FOUNDRY_CORNER_D = [ {x:304,y:190,w:16,h:130}, {x:190,y:304,w:130,h:16} ];   // two inner-facing pallets
+const MAP_FOUNDRY = {
+  name: "Foundry", theme: "foundry",
+  walls: [
+    ...BORDER,
+    // central RING plaza — an outer shell (doored on all 4 sides) around a solid core block you circle
+    {x:630,y:390,w:110,h:16},{x:860,y:390,w:110,h:16},   // ring top (gap x740..860)
+    {x:630,y:714,w:110,h:16},{x:860,y:714,w:110,h:16},   // ring bottom
+    {x:630,y:390,w:16,h:110},{x:630,y:620,w:16,h:110},   // ring left (gap y500..620)
+    {x:954,y:390,w:16,h:110},{x:954,y:620,w:16,h:110},   // ring right
+    {x:740,y:500,w:120,h:120},                           // the core block (loop around it)
+    // sparse ASYMMETRIC mid cover — deliberately not mirrored, so the map has a flow/handedness
+    {x:390,y:540,w:130,h:16},{x:1080,y:470,w:16,h:140},
+    {x:410,y:300,w:50,h:50},{x:1140,y:760,w:50,h:50},
+    {x:800,y:190,w:46,h:46},{x:800,y:900,w:46,h:46},
+    {x:300,y:560,w:46,h:46},{x:1300,y:560,w:46,h:46},
+    {x:560,y:820,w:46,h:46},{x:1040,y:250,w:46,h:46},
+    ...fourCorners(FOUNDRY_CORNER_W),                    // the four enclosed loop-rooms
+  ],
+  doors: [
+    {x:740,y:390,w:120,h:16},   // ring — top entry
+    {x:740,y:714,w:120,h:16},   // ring — bottom entry
+    {x:630,y:500,w:16,h:120},   // ring — left entry
+    {x:954,y:500,w:16,h:120},   // ring — right entry
+    ...fourCorners(FOUNDRY_CORNER_D),   // two slam-doors per corner room
+  ],
+};
+// MAP 3 — "SCRAMBLE": the crazy one. No rooms, no rings — a wide-open BUMPER FIELD packed with
+// pillars of every size (a symmetric scatter), a central diamond of pillars, and four isolated
+// slam-door gates on the cardinal edges. Tons of micro-cover + LOS breaks = chaotic, fast, juke-heavy.
+const SCRAMBLE_QUAD = [   // one quadrant of scattered pillars (reflected into all four)
+  P(200,170,52), P(430,190,44), P(300,360,60), P(560,300,46),
+  P(160,430,44), P(650,430,48), P(470,440,40), P(360,150,40),
+];
+const MAP_SCRAMBLE = {
+  name: "Scramble", theme: "crystal",
+  walls: [
+    ...BORDER,
+    ...fourCorners(SCRAMBLE_QUAD),        // 32 scattered bumpers, symmetric
+    // central diamond of pillars — weave through the middle
+    {x:690,y:470,w:48,h:48},{x:862,y:470,w:48,h:48},
+    {x:690,y:602,w:48,h:48},{x:862,y:602,w:48,h:48},
+    {x:776,y:536,w:48,h:48},               // dead-center bumper
+    // axis mid-edge bumpers
+    {x:776,y:170,w:44,h:44},{x:776,y:906,w:44,h:44},
+    {x:150,y:538,w:44,h:44},{x:1406,y:538,w:44,h:44},
+    // four isolated slam-door GATES on the cardinal edges (stub + door + stub)
+    {x:690,y:250,w:70,h:16},{x:844,y:250,w:70,h:16},     // N gate (door x760..844)
+    {x:690,y:854,w:70,h:16},{x:844,y:854,w:70,h:16},     // S gate
+    {x:250,y:470,w:16,h:70},{x:250,y:624,w:16,h:70},     // W gate (door y540..624)
+    {x:1334,y:470,w:16,h:70},{x:1334,y:624,w:16,h:70},   // E gate
+  ],
+  doors: [
+    {x:760,y:250,w:84,h:16},    // N gate
+    {x:760,y:854,w:84,h:16},    // S gate
+    {x:250,y:540,w:16,h:84},    // W gate
+    {x:1334,y:540,w:16,h:84},   // E gate
+  ],
+};
+// ------------------------------------------------------------
+// THEMES — each map gets its own palette, lighting, floor/grid, and WALL GEOMETRY style so the three
+// don't read as the same cyan boxes. `style`: "box" = sharp neon slabs (tech), "column" = square walls
+// become round molten columns, "crystal" = square walls become jagged glowing spikes. Long walls stay
+// low bars in every style. Taller walls block more sightline, so wallH is also a play lever per map.
+// ------------------------------------------------------------
+const THEMES = {
+  // ARENA — cold cyan neon "grid" arena (the clean, competitive look)
+  grid: {
+    bg:0x05070b, fog:0x05070b, fogNear:520, fogFar:1500,
+    floor:0x0a1018, grid1:0x2ea6d8, grid2:0x123044, gridCell:34, gridOp:0.30,
+    wall:0x18222e, wallEmis:0x0a1622, wallEmisInt:0.12, rim:0x69e0ff, rim2:0x69e0ff, wallH:1.0, style:"box",
+    hemiSky:0x2a3d55, hemiGround:0x05070b, hemiInt:0.65, ambCol:0x223247, ambInt:0.50, sunCol:0x8fb4dd, sunInt:0.60,
+  },
+  // FOUNDRY — molten industrial: warm orange embers, tall round columns, smoky red fog
+  foundry: {
+    bg:0x0b0503, fog:0x1a0a05, fogNear:440, fogFar:1350,
+    floor:0x140a06, grid1:0xd9631f, grid2:0x3a1c0c, gridCell:24, gridOp:0.34,
+    wall:0x2a140a, wallEmis:0x5e2207, wallEmisInt:0.55, rim:0xff8a2a, rim2:0xffc24d, wallH:1.5, style:"column",
+    hemiSky:0x5a2c12, hemiGround:0x0b0503, hemiInt:0.72, ambCol:0x3c1f10, ambInt:0.55, sunCol:0xffa24d, sunInt:0.72,
+  },
+  // SCRAMBLE — toxic overgrowth: acid-green + violet crystal spikes on a dark jade floor
+  crystal: {
+    bg:0x03090a, fog:0x06150f, fogNear:560, fogFar:1650,
+    floor:0x07140d, grid1:0x35d98a, grid2:0x0c3324, gridCell:46, gridOp:0.24,
+    wall:0x112219, wallEmis:0x0e2e1c, wallEmisInt:0.55, rim:0x6cff9e, rim2:0xb070ff, wallH:1.25, style:"crystal",
+    hemiSky:0x1e4a3a, hemiGround:0x03090a, hemiInt:0.70, ambCol:0x143728, ambInt:0.55, sunCol:0x8fe6b4, sunInt:0.62,
+  },
+};
+function mapTheme(){ return THEMES[(MAPS[currentMapId]||{}).theme] || THEMES.grid; }
+const MAPS = { arena: MAP_ARENA, foundry: MAP_FOUNDRY, scramble: MAP_SCRAMBLE };
+const MAP_IDS = ["arena","foundry","scramble"];
+let currentMapId = "arena";
+let walls = MAPS[currentMapId].walls;       // active collision geometry (swapped by applyMap)
+let doorDefs = MAPS[currentMapId].doors;    // active door layout
+function makeDoors(){ return doorDefs.map(d=>({ x:d.x, y:d.y, w:d.w, h:d.h, open:false })); }
+let obstacles = walls;    // collision set: walls + closed doors + live hazards, rebuilt each frame
+let losObstacles = walls; // sight set: same, MINUS hazards flagged noLos (e.g. Bulwark's Bunker — a body-block you can see past)
+// Switch the active map: repoint walls/doors, rebuild the nav grid, and (if 3D is up) rebuild the
+// static geometry. Cheap; called from the menu picker and, on clients, when the host's map differs.
+function applyMap(id){
+  if (!MAPS[id]) return;                        // re-applying the same map is a harmless cheap rebuild
+  currentMapId=id; walls=MAPS[id].walls; doorDefs=MAPS[id].doors;
+  obstacles=walls; losObstacles=walls;
+  rebuildNav();
+  if (typeof gl!=="undefined" && gl.ok) buildStaticGL();
+}
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const statusEl = document.getElementById("status");
+const tipsEl = document.getElementById("tips");
+const cam = { x: 0, y: 0 };
+
+// 3D renderer state (declared early so resizeCanvas can reference gl before initGL runs). Defined below.
+let use3D = (typeof THREE!=="undefined");
+const gl = { ok:false };
+const G = { wallH:52, bodyH:34, coreY:26 };   // 3D heights (taller than the 2D fake for drama)
+
+// Fit the canvas (= the camera viewport) to the whole browser window.
+function resizeCanvas(){
+  VIEW_W = Math.max(320, Math.round(window.innerWidth));
+  VIEW_H = Math.max(240, Math.round(window.innerHeight));
+  canvas.width = VIEW_W; canvas.height = VIEW_H;
+  if (typeof gl!=="undefined" && gl.ok){ gl.renderer.setSize(VIEW_W,VIEW_H,false);
+    gl.camera.aspect=VIEW_W/VIEW_H; gl.camera.updateProjectionMatrix(); }
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+// ============================================================
+// JUICE — screen shake, particles, shockwave rings, color shading
+// ============================================================
+const effects = { shake: 0, particles: [], rings: [] };
+function addShake(a){ effects.shake = Math.min(16, effects.shake + a); }
+function spawnBurst(x, y, color, n, spd, life){
+  for (let i=0;i<n;i++){ const a=Math.random()*Math.PI*2, s=spd*(0.4+Math.random()*0.8);
+    effects.particles.push({ x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+      life:life*(0.6+Math.random()*0.6), max:life, color, size:2+Math.random()*2 }); }
+}
+function spawnRing(x, y, color, maxR){ effects.rings.push({ x, y, r:6, maxR, life:0.4, max:0.4, color }); }
+function updateEffects(dt){
+  effects.shake = Math.max(0, effects.shake - dt*40);
+  for (let i=effects.particles.length-1;i>=0;i--){ const p=effects.particles[i];
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.9; p.vy*=0.9; p.life-=dt; if (p.life<=0) effects.particles.splice(i,1); }
+  for (let i=effects.rings.length-1;i>=0;i--){ const r=effects.rings[i];
+    r.life-=dt; r.r += (r.maxR-r.r)*Math.min(1,dt*12); if (r.life<=0) effects.rings.splice(i,1); }
+}
+function shade(hex,f){ const n=parseInt(hex.slice(1),16), r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  return "rgb("+Math.round(r*f)+","+Math.round(g*f)+","+Math.round(b*f)+")"; }
+function tint(hex,f){ const n=parseInt(hex.slice(1),16), r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  return "rgb("+Math.round(r+(255-r)*f)+","+Math.round(g+(255-g)*f)+","+Math.round(b+(255-b)*f)+")"; }
+function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")"; }
+
+// ============================================================
+// SOUND — tiny WebAudio synth (no asset files; single-file / Drive-safe).
+// Resumed on the first user gesture (PLAY click, key, or mouse) per autoplay rules.
+// ============================================================
+let audioCtx=null, sfxOn=true, noiseBuf=null, sfxBus=null;
+// One shared SFX chain: gain -> gentle lowpass (rolls off the harsh top) -> soft compressor
+// (tames stacked/overlapping hits) -> destination. Every effect routes through this so nothing
+// is raw + clicky, and a crowd of sounds can't spike into an ear-splitting stack.
+function buildSfxBus(){
+  const g=audioCtx.createGain(); g.gain.value=0.9;
+  const lp=audioCtx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=3200; lp.Q.value=0.5;
+  const comp=audioCtx.createDynamicsCompressor();
+  comp.threshold.value=-20; comp.knee.value=26; comp.ratio.value=3.2; comp.attack.value=0.004; comp.release.value=0.18;
+  g.connect(lp).connect(comp).connect(audioCtx.destination);
+  return g;
+}
+function sfxOut(){ return sfxBus||audioCtx.destination; }
+function initAudio(){
+  if (audioCtx){ if (audioCtx.state==="suspended") audioCtx.resume(); return; }
+  const AC = (typeof window!=="undefined") && (window.AudioContext||window.webkitAudioContext);
+  if (!AC) return;
+  audioCtx = new AC();
+  sfxBus = buildSfxBus();
+  const n=Math.floor(audioCtx.sampleRate*0.4); noiseBuf=audioCtx.createBuffer(1,n,audioCtx.sampleRate);
+  const d=noiseBuf.getChannelData(0); for (let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  if (!started && musOn) startMusic("menu");   // first user gesture unlocks audio -> lobby music while the menu is up
+}
+// A soft attack + release (no instant on/off) is what removes the "click" — ramp up over ~18ms
+// and glide back down instead of snapping, so tones read as blips rather than ticks.
+function tone(freq,dur,type,vol,slideTo){
+  if (!audioCtx||!sfxOn) return;
+  const t=audioCtx.currentTime, o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type||"sine"; o.frequency.setValueAtTime(freq,t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo),t+dur);
+  const peak=vol||0.18, atk=Math.min(0.018,dur*0.4);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+atk);
+  g.gain.setValueAtTime(peak,t+Math.max(atk,dur*0.5));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.03);
+  o.connect(g).connect(sfxOut()); o.start(t); o.stop(t+dur+0.06);
+}
+function noise(dur,vol,hp){
+  if (!audioCtx||!sfxOn||!noiseBuf) return;
+  const t=audioCtx.currentTime, s=audioCtx.createBufferSource(), g=audioCtx.createGain(), f=audioCtx.createBiquadFilter();
+  s.buffer=noiseBuf; f.type="bandpass"; f.frequency.value=hp||400; f.Q.value=0.6;   // bandpass, not highpass -> less hiss
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.18,t+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f).connect(g).connect(sfxOut()); s.start(t); s.stop(t+dur);
+}
+function sfx(name){
+  if (!audioCtx||!sfxOn) return;
+  switch(name){
+    case "dash":      noise(0.10,0.035,900); break;    // soft airy whoosh (you dash a lot — keep it subtle)
+    case "tag":       tone(150,0.20,"triangle",0.17,70); noise(0.14,0.09,260); break;   // rounder thud, less crack
+    case "doorOpen":  tone(500,0.11,"triangle",0.08,720); break;
+    case "doorClose": tone(300,0.11,"triangle",0.10,150); noise(0.05,0.05,420); break;
+    case "doorBreak": noise(0.26,0.12,150); tone(92,0.30,"triangle",0.12,48); break;    // wooden crunch, not a buzz
+    case "drain":     tone(680,0.14,"sine",0.11,1020); tone(1020,0.16,"sine",0.06); break;
+    case "cull":      tone(300,0.44,"triangle",0.12,120); tone(150,0.44,"sine",0.07,90); break;   // soft descending, no saw buzz
+    case "showdown":  tone(280,0.5,"triangle",0.13,820); break;
+    case "it":        tone(560,0.18,"triangle",0.10,420); tone(370,0.22,"sine",0.07); break;
+    case "enter":     tone(820,0.09,"sine",0.06,940); break;
+    case "gate":      tone(360,0.13,"sine",0.08,240); break;
+    case "heart":     tone(66,0.16,"sine",0.20,44); break;   // low thump — the terror-radius heartbeat
+  }
+}
+// audible "lub-dub" — ~120-150Hz so laptop speakers actually reproduce it (66Hz was inaudible)
+function heartbeat(v){
+  if (!audioCtx||!sfxOn) return;
+  const t0=audioCtx.currentTime;
+  const thump=(at,f,vol)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type="sine"; o.frequency.setValueAtTime(f*1.5,at); o.frequency.exponentialRampToValueAtTime(f,at+0.07);
+    // slower attack (24ms) + longer tail = a soft "thud", not the old clicky tick
+    g.gain.setValueAtTime(0.0001,at); g.gain.exponentialRampToValueAtTime(vol,at+0.024); g.gain.exponentialRampToValueAtTime(0.0001,at+0.24);
+    o.connect(g).connect(sfxOut()); o.start(at); o.stop(at+0.28); };
+  thump(t0,148,0.34*v); thump(t0+0.17,116,0.26*v);
+}
+let heartT=0, terrorLevel=0, terrorFlash=0;
+function updateTerror(dt){                                    // heartbeat cadence + red throb quicken as IT closes
+  terrorFlash=Math.max(0,terrorFlash-dt*3);
+  const you=players[0];
+  if (!started || !you || you.isIt || you.role==="interference" || itIndex<0){ heartT=0; terrorLevel=0; return; }
+  const d=dist(you,players[itIndex]);
+  if (d<CFG.terrorRadius){
+    terrorLevel=1-d/CFG.terrorRadius;                        // 0 far .. 1 point-blank
+    heartT-=dt; if (heartT<=0){ heartbeat(0.6+0.5*terrorLevel); terrorFlash=1; heartT=0.9-0.6*terrorLevel; }
+  } else { terrorLevel=0; heartT=0; }
+}
+function earshot(x,y){ const you=players[0]; return you && dist(you,{x,y})<540; }
+
+// ---- background music: two procedural looping synth beds (no asset files). ----
+// game = the moody driving bed (the "good" original); menu = a gentler/slower/brighter variant, same
+// consonant voicing so nothing clashes. Volume slider + mute button in the corner; keys M/N still work.
+// CLEAN SWITCHING: each track gets its OWN bus. On a swap the old bus fades out and is retired while a
+// fresh bus fades in after a short silent gap — so long sustained pads never bleed across tracks.
+let musOn=true, musVol=0.85, musTimer=null, musBus=null, musNextT=0, musStep=0, musMode="game";
+const MUS = {
+  game: { bpm:100, roots:[110.00, 82.41, 98.00, 65.41], lp:1900, gain:0.30, arp:[2,3,2,4] },   // A2·E2·G2·C2 moody minor (original)
+  menu: { bpm:80,  roots:[146.83, 110.00, 130.81, 98.00], lp:2600, gain:0.26, arp:[2,3,2,4] },  // D3·A2·C3·G2 calmer/slower/brighter
+};
+function musTargetGain(mode){ return (musOn ? MUS[mode].gain*musVol : 0.0001); }
+function musNewBus(mode){                                            // a fresh per-track bus (gain -> lowpass -> out)
+  const g=audioCtx.createGain(); g.gain.value=0.0001;
+  const lp=audioCtx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=MUS[mode].lp;
+  g.connect(lp).connect(audioCtx.destination); g._lp=lp; return g;
+}
+function musGain(){ return musBus; }                                 // current bus notes route into
+function musVoice(freq,at,dur,type,vol){
+  const bus=musGain(); if(!bus) return;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type||"triangle"; o.frequency.setValueAtTime(freq,at);
+  g.gain.setValueAtTime(0.0001,at); g.gain.exponentialRampToValueAtTime(vol,at+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,at+dur);
+  o.connect(g).connect(bus); o.start(at); o.stop(at+dur+0.03);
+}
+function musNote(step,at,spb){
+  const m=MUS[musMode];
+  const bar=Math.floor(step/8)%4, root=m.roots[bar], s=step%8;
+  if (s===0) { musVoice(root,at,spb*7.5,"sawtooth",0.05); musVoice(root*1.5,at,spb*7.5,"sawtooth",0.035); }  // sustained pad (root+fifth)
+  if (s%2===0) musVoice(root/1,at,spb*0.9,"sine",0.10);            // bass pulse on the beat
+  const arp=m.arp[ (step%4) ];                                     // sparkly arp on the offbeats
+  if (s%2===1) musVoice(root*arp,at,spb*(musMode==="menu"?1.05:0.8),"triangle",0.045);
+}
+function musScheduler(){
+  if (!audioCtx || !musBus){ return; }
+  const spb=60/MUS[musMode].bpm/2;                                 // eighth-note step
+  while (musNextT < audioCtx.currentTime+0.25){ musNote(musStep,musNextT,spb); musStep=(musStep+1)%32; musNextT+=spb; }
+}
+function _retireBus(b){ if (!b||!audioCtx) return; const now=audioCtx.currentTime, lp=b._lp;   // fade out then disconnect
+  try { b.gain.cancelScheduledValues(now); b.gain.setValueAtTime(b.gain.value,now); b.gain.linearRampToValueAtTime(0.0001, now+0.18); } catch(e){}
+  setTimeout(()=>{ try { b.disconnect(); if (lp) lp.disconnect(); } catch(e){} }, 450); }
+function startMusic(mode){
+  if (!audioCtx||!musOn) return;
+  const nm=mode||"game", now=audioCtx.currentTime;
+  if (musBus && nm===musMode){                                     // same track already up — just make sure it's audible
+    musBus.gain.cancelScheduledValues(now); musBus.gain.setTargetAtTime(musTargetGain(nm), now, 0.1);
+    if (!musTimer) musTimer=setInterval(musScheduler,40); return;
+  }
+  if (musBus) _retireBus(musBus);                                  // switching tracks: retire the old bus (fades its tail out)
+  musMode=nm; musBus=musNewBus(nm);
+  musBus.gain.setValueAtTime(0.0001, now+0.20);                    // brief silent gap, then fade the new track in
+  musBus.gain.linearRampToValueAtTime(musTargetGain(nm), now+0.55);
+  musStep=0; musNextT=now+0.22;
+  if (!musTimer) musTimer=setInterval(musScheduler,40);
+}
+function stopMusic(){
+  if (musTimer){ clearInterval(musTimer); musTimer=null; }
+  if (musBus){ _retireBus(musBus); musBus=null; }
+}
+// live volume + master mute (wired to the corner UI). musVol 0..1 scales the current track's gain.
+function setMusVol(v){ musVol=clamp(v,0,1);
+  if (musBus && audioCtx){ musBus.gain.cancelScheduledValues(audioCtx.currentTime); musBus.gain.setTargetAtTime(musTargetGain(musMode), audioCtx.currentTime, 0.08); }
+  refreshAudioUI(); }
+function toggleMuteAll(){ const anyOn=sfxOn||musOn; sfxOn=!anyOn; musOn=!anyOn;   // master mute: silences SFX + music together
+  if (musOn) startMusic(started?"game":"menu"); else stopMusic(); refreshAudioUI(); }
+function refreshAudioUI(){ const b=document.getElementById("muteBtn"), s=document.getElementById("volSlider");
+  if (b) b.textContent=(sfxOn||musOn)?"🔊":"🔇"; if (s && document.activeElement!==s) s.value=Math.round(musVol*100); }
+
+// ============================================================
+// STATE
+// ============================================================
+let players = [];
+let itIndex = -1;
+let match = null;
+let cullSeq = 0;
+let started = false;
+const keys = {};
+
+// classes — the identity read is the CHASSIS SILHOUETTE (works in fog / at distance),
+// with an accent color as the secondary tell. Player color/photo/accessory still customize on top.
+// Abilities hang off the `cls` field; each fires on Q (disabled while IT). Tunables live in CFG.
+const CLASSES = [
+  { id:"striker", name:"Striker", role:"Offensive", accent:"#ff8a3d", cd:CFG.strikeCd,
+    abil:"Shove",   tip:"aim with the cursor + R-click — knocks a rival back AND punches the core out of their hands so you can grab it (works on IT too)" },
+  { id:"bulwark", name:"Bulwark", role:"Defensive", accent:"#49a6ff", cd:CFG.cageCd,
+    abil:"Bunker", tip:"R-click: 4 walls snap around you for 2s — only you can pass. Cage IT out or trap it in" },
+  { id:"warden",  name:"Warden",  role:"Hybrid",    accent:"#b070ff", cd:CFG.blinkCd,
+    abil:"Phase Dash", tip:"R-click: dash straight THROUGH a wall to escape a chase or cut off a runner — the only class that ignores geometry" },
+];
+const clsById = id => CLASSES.find(c=>c.id===id) || CLASSES[0];
+const CLS_LETTER = { striker:"S", bulwark:"B", warden:"W" };   // compact class tell for the ability ring
+
+// cosmetics
+const COLORS = ["#63e6ff","#5be89b","#ffd166","#ff9d63","#b98bff","#ff7ac2","#7cf0e0","#eaf2ff","#9db4ff","#c0f070"];
+const ACCESSORIES = ["none","cap","visor","antenna","crown","ears"];
+const BOT_COLORS = ["#5be89b","#ffd166","#ff9d63","#b98bff","#ff7ac2","#7cf0e0","#9db4ff","#c0f070","#f0a3a3"];
+const custom = { name:"You", color:"#63e6ff", accessory:"none", cls:"striker", img:null, imgSrc:null };
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+// human tap edges (dash / door / ability). Set on the keydown edge, consumed & cleared each frame.
+// abilHeld tracks whether the ability button is currently DOWN (Striker holds to aim, releases to fire).
+let tapDash=false, tapDoor=false, tapAbil=false, abilHeld=false;
+window.addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  initAudio();
+  // typing in the name box (or any field) must NOT fire game hotkeys — e.g. an "n" in "Loren"
+  // was toggling the music off, "m" muting SFX, "r" restarting. Bail before any hotkey handling.
+  const tn = e.target && e.target.tagName;
+  if (tn==="INPUT" || tn==="TEXTAREA" || (e.target && e.target.isContentEditable)) return;
+  if (!keys[k]){ if (k===" "||k==="shift") tapDash=true; if (k==="e") tapDoor=true; if (k==="q"){ tapAbil=true; abilHeld=true; } }   // Space/Shift=dash, E=door(alt), Q=ability (mouse primary: LMB door, RMB ability). Stealing is collision-based — just run into carriers.
+  keys[k] = true;
+  if (e.key === " ") e.preventDefault();
+  if (k === "r" && started && net.mode!=="client") reset();   // clients are driven by the host; don't self-reset
+  if (k === "c" && match && match.phase==="over") openMenu();
+  if (k === "m"){ sfxOn=!sfxOn; refreshAudioUI(); }               // SFX mute toggle
+  if (k === "n"){ musOn=!musOn; if (musOn) startMusic(started?"game":"menu"); else stopMusic(); refreshAudioUI(); }   // music toggle
+  if (k === "t") document.getElementById("tune").classList.toggle("show");
+  if (k === "g" && gl.ok){ use3D=!use3D; document.getElementById("gl").style.display=use3D?"block":"none"; }  // toggle 3D / 2D
+});
+window.addEventListener("keyup", e => { const k=e.key.toLowerCase(); keys[k]=false; if (k==="q") abilHeld=false; });
+// Mouse controls (desktop primary): LMB = open/close doors, RMB = class ability (aimed at the cursor), Space = dash.
+let mouseSX=VIEW_W/2, mouseSY=VIEW_H/2;   // last cursor pos in canvas/screen px (canvas fills the window 1:1)
+canvas.addEventListener("mousemove", e => { const r=canvas.getBoundingClientRect(); mouseSX=e.clientX-r.left; mouseSY=e.clientY-r.top; });
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("mousedown", e => {
+  initAudio();
+  const r=canvas.getBoundingClientRect(); mouseSX=e.clientX-r.left; mouseSY=e.clientY-r.top;
+  if (e.button===0) tapDoor=true;                                // LMB open/close door
+  else if (e.button===2){ tapAbil=true; abilHeld=true; e.preventDefault(); }    // RMB class ability (hold to aim)
+});
+window.addEventListener("mouseup", e => { if (e.button===2) abilHeld=false; });   // RMB release fires the Striker shove
+// world-space cursor (for aiming the ability). In 3D the world is drawn through a perspective camera,
+// so the flat 2D `cam` offset is WRONG — we must unproject the cursor and intersect the floor plane
+// (y=0) to get the real world point under the mouse. Falls back to the 2D mapping in the 2D renderer.
+const _mw = { ndc:null, dir:null };
+function mouseWorld(){
+  if (use3D && gl.ok && gl.camera){
+    if (!_mw.ndc){ _mw.ndc=new THREE.Vector3(); _mw.dir=new THREE.Vector3(); }
+    _mw.ndc.set((mouseSX/VIEW_W)*2-1, -(mouseSY/VIEW_H)*2+1, 0.5).unproject(gl.camera);
+    _mw.dir.copy(_mw.ndc).sub(gl.camera.position);
+    const t = Math.abs(_mw.dir.y)>1e-6 ? -gl.camera.position.y/_mw.dir.y : 0;   // hit the floor plane y=0
+    if (t>0) return { x: gl.camera.position.x+_mw.dir.x*t, y: gl.camera.position.z+_mw.dir.z*t };  // three z == game y
+  }
+  return { x:cam.x+mouseSX, y:cam.y+mouseSY };
+}
+
+function makePlayer(x, y, human, name, color) {
+  return { x, y, vx:0, vy:0, heading:-Math.PI/2, human, name, color,
+    role:"runner", isIt:false, stun:0, immunity:0, hold:0, itMult:1, buffed:false,
+    culledAt:-1, place:0, gateCdT:0, beaconCdT:0, doorCdT:0, aiTimer:0, aiWander:{x:0,y:0},
+    aiTarget:null, aiAlertT:0, aiKnows:false, aiSeen:0, aiLastIt:{x:0,y:0}, aiErr:0, aiErrT:0, aiStuck:0, aiRepath:0,
+    aiPath:null, aiPathI:0, aiPathGoal:null, aiPatrol:null,
+    breakDoor:null, breakT:0, doorSlowT:0, stealCdT:0, grabGraceT:0,
+    dash:{t:0,dir:{x:0,y:0}}, dashCharges:CFG.dashCharges, dashRegenT:0, dashCdT:0, aiDashT:0,
+    cls:"striker", abilCdT:0, shoveT:0, shoveAng:0, blinkT:0, aiming:false, aimAng:-Math.PI/2,
+    blockCharges:CFG.blockCharges, blockRegenT:0,   // ghost (interference) temp-block charges
+    trail:[], trailT:0, speed:0, carrying:null, score:0, rank:0, accessory:"none", img:null, wins:0,
+    remote:false, slot:-1, conn:null };   // multiplayer: a remote player's slot is driven by network input
+}
+// persistent win count (localStorage) — shown as a gold star with a number on your model, to show off
+function loadWins(){ try{ return parseInt(localStorage.getItem("tag_wins")||"0",10)||0; }catch(e){ return 0; } }
+function awardWin(){ const w=loadWins()+1; try{ localStorage.setItem("tag_wins", w); }catch(e){}
+  custom.wins=w; if(players[0]) players[0].wins=w;
+  if (net.mode==="client" && net.conns[0] && net.conns[0].open){ try{ net.conns[0].send({t:"wins", n:w}); }catch(e){} }  // tell host so others see it live
+}
+// credit a win once, the moment a match ends, if MY player (index 0) is the top surviving scorer
+function checkWinCredit(){
+  if (match.phase!=="over"){ match._winChecked=false; return; }
+  if (match._winChecked) return; match._winChecked=true;
+  const me=players[0]; if(!me || me.role==="interference") return;
+  const act=activePlayers(); if(!act.length) return;
+  const top=act.reduce((a,b)=> b.score>a.score?b:a, act[0]);
+  if (top===me) awardWin();
+}
+function reset() {
+  players = []; cullSeq = 0;
+  const spots = [ {x:800,y:1000},{x:300,y:300},{x:1300,y:300},
+    {x:300,y:820},{x:1300,y:820},{x:800,y:120},{x:150,y:560},{x:1450,y:560} ];
+  const you = makePlayer(spots[0].x, spots[0].y, true, custom.name || "You", custom.color);
+  you.accessory = custom.accessory; you.img = custom.img || null; you.cls = custom.cls; you.wins = loadWins(); players.push(you);
+  for (let i = 1; i < CFG.players; i++) {
+    const s = spots[i] || {x:800,y:560};
+    const b = makePlayer(s.x, s.y, false, "Bot " + (i+1), pick(BOT_COLORS));
+    b.accessory = pick(ACCESSORIES);         // bots get random looks too, for charm
+    b.cls = CLASSES[(i-1) % CLASSES.length].id;   // spread bots across all three classes
+    players.push(b);
+  }
+  itIndex = -1;
+  match = { phase:"grace", t:CFG.grace, elapsed:0, marksLeft:CFG.cullMarks.slice(),
+            hazards:[], cores:[], banks:[], doors:makeDoors(), beaconTimer:0, feed:[], results:null, announce:null };
+  reassignRemotes();   // networked host: rebind joined clients to their slots (reset rebuilt them as bots)
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+function moveToward(v,t,md){ return Math.abs(t-v)<=md ? t : v+Math.sign(t-v)*md; }
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function activePlayers(){ return players.filter(p => p.role !== "interference"); }
+function feed(msg){ match.feed.unshift({ text: msg, t: 4.0 }); if (match.feed.length>6) match.feed.pop(); }
+// big center-screen announcement (culls, showdown) — scales in, holds, fades. col tints the headline.
+function announce(text, sub, dur, col){ match.announce={ text, sub:sub||"", t:dur||2.4, max:dur||2.4, col:col||"#ffd479" }; }
+
+function collide(p) {
+  for (const w of obstacles) {
+    if (w.passOwner===p) continue;                 // Bulwark walks through its own Bunker walls
+    const nx=clamp(p.x,w.x,w.x+w.w), ny=clamp(p.y,w.y,w.y+w.h);
+    let dx=p.x-nx, dy=p.y-ny, d=Math.hypot(dx,dy);
+    if (d < CFG.radius) {
+      if (d===0){ dx=0; dy=-1; d=1; }
+      const push=CFG.radius-d, ux=dx/d, uy=dy/d;
+      p.x+=ux*push; p.y+=uy*push;
+      const vn=p.vx*ux+p.vy*uy; if (vn<0){ p.vx-=vn*ux; p.vy-=vn*uy; }
+    }
+  }
+}
+// LOS: does segment a->b cross any obstacle?
+function segHitsRect(x1,y1,x2,y2,w){
+  const dx=x2-x1, dy=y2-y1; let tmin=0, tmax=1;
+  if (Math.abs(dx)<1e-9){ if (x1<w.x||x1>w.x+w.w) return false; }
+  else { let t1=(w.x-x1)/dx, t2=(w.x+w.w-x1)/dx; if(t1>t2){const t=t1;t1=t2;t2=t;}
+    tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2); if(tmin>tmax) return false; }
+  if (Math.abs(dy)<1e-9){ if (y1<w.y||y1>w.y+w.h) return false; }
+  else { let t1=(w.y-y1)/dy, t2=(w.y+w.h-y1)/dy; if(t1>t2){const t=t1;t1=t2;t2=t;}
+    tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2); if(tmin>tmax) return false; }
+  return tmin<=tmax;
+}
+function losBlocked(a,b){ for (const w of losObstacles) if (segHitsRect(a.x,a.y,b.x,b.y,w)) return true; return false; }
+// nearest ray-vs-rect entry distance (for the vision polygon)
+function rayRectEntry(ox,oy,dx,dy,w,maxT){
+  let tmin=0, tmax=maxT;
+  if (Math.abs(dx)<1e-9){ if (ox<w.x||ox>w.x+w.w) return Infinity; }
+  else { let t1=(w.x-ox)/dx, t2=(w.x+w.w-ox)/dx; if(t1>t2){const t=t1;t1=t2;t2=t;}
+    tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2); if(tmin>tmax) return Infinity; }
+  if (Math.abs(dy)<1e-9){ if (oy<w.y||oy>w.y+w.h) return Infinity; }
+  else { let t1=(w.y-oy)/dy, t2=(w.y+w.h-oy)/dy; if(t1>t2){const t=t1;t1=t2;t2=t;}
+    tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2); if(tmin>tmax) return Infinity; }
+  return tmin>=0 ? tmin : (tmax>=0 ? 0 : Infinity);
+}
+function computeVisibility(o, radius){
+  const N=CFG.visRays, pts=[];
+  for (let i=0;i<N;i++){
+    const a=(i/N)*Math.PI*2, dx=Math.cos(a), dy=Math.sin(a);
+    let t=radius;
+    for (const w of losObstacles){ const th=rayRectEntry(o.x,o.y,dx,dy,w,radius); if (th<t) t=th; }
+    pts.push({ x:o.x+dx*t, y:o.y+dy*t });
+  }
+  return pts;
+}
+function readMoveKeys(){
+  let dx=0,dy=0;
+  if (keys["w"]) dy-=1; if (keys["s"]) dy+=1; if (keys["a"]) dx-=1; if (keys["d"]) dx+=1;
+  const m=Math.hypot(dx,dy); if (m>0){ dx/=m; dy/=m; }
+  return { dx, dy, moving: m>0 };
+}
+
+// --- bot AI helpers ---
+function randOpenPoint(){
+  for (let i=0;i<30;i++){
+    const x=70+Math.random()*(WORLD_W-140), y=70+Math.random()*(WORLD_H-140);
+    if (x>600 && x<1000 && y>420 && y<700) continue;   // skip the enclosed central room (door-gated)
+    let ok=true;
+    for (const w of walls){ if (x>w.x-24 && x<w.x+w.w+24 && y>w.y-24 && y<w.y+w.h+24){ ok=false; break; } }
+    if (ok) return { x, y };
+  }
+  return { x:WORLD_W/2, y:WORLD_H/2 };
+}
+function clearance(p, ang, probe){
+  const dx=Math.cos(ang), dy=Math.sin(ang); let t=probe;
+  for (const w of walls){ const th=rayRectEntry(p.x,p.y,dx,dy,w,probe); if (th<t) t=th; }
+  return t;
+}
+// steer a desired direction around walls (prevents corner-pinning, hugs edges).
+// Clearance dominates the score, so a bot facing a wall will happily turn hard
+// (even reverse) rather than grind into it; a small bias keeps it pointed at goal.
+function steerAvoid(p, dirx, diry, probe){
+  const base=Math.atan2(diry,dirx);
+  const offs=[0,0.3,-0.3,0.6,-0.6,1.0,-1.0,1.5,-1.5,2.1,-2.1,2.7,-2.7,Math.PI];
+  let bestAng=base, bestScore=-1e9;
+  for (const o of offs){
+    const a=base+o;
+    const c=Math.min(clearance(p,a,probe),probe);
+    // reward open space strongly; only lightly prefer the goal direction
+    const score = c*3 - Math.abs(o)*14 + (c>=probe?40:0);
+    if (score>bestScore){ bestScore=score; bestAng=a; }
+  }
+  return { dx:Math.cos(bestAng), dy:Math.sin(bestAng) };
+}
+
+// ------------------------------------------------------------
+// NAV GRID + A*  — routes bots AROUND barriers to reach circles,
+// instead of grinding the wall face when a node is right behind one.
+// Static (walls only, inflated by body radius); door gaps count as open.
+// ------------------------------------------------------------
+const NAV=32, GW=Math.ceil(WORLD_W/NAV), GH=Math.ceil(WORLD_H/NAV);
+const navBlk=new Uint8Array(GW*GH);
+function rebuildNav(){                       // refill the block grid from the ACTIVE walls (re-run on map change)
+  const pad=CFG.radius+4;
+  for (let gy=0;gy<GH;gy++) for (let gx=0;gx<GW;gx++){
+    const cx=gx*NAV+NAV/2, cy=gy*NAV+NAV/2; let b=0;
+    for (const w of walls){ if (cx>w.x-pad&&cx<w.x+w.w+pad&&cy>w.y-pad&&cy<w.y+w.h+pad){ b=1; break; } }
+    navBlk[gy*GW+gx]=b;
+  }
+}
+rebuildNav();
+function cellOpen(gx,gy){ return gx>=0&&gy>=0&&gx<GW&&gy<GH&&navBlk[gy*GW+gx]===0; }
+function nearestOpenCell(gx,gy){
+  if (cellOpen(gx,gy)) return [gx,gy];
+  for (let r=1;r<10;r++) for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++){
+    if (Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+    if (cellOpen(gx+dx,gy+dy)) return [gx+dx,gy+dy];
+  }
+  return null;
+}
+function navPath(ax,ay,bx,by){
+  const s=nearestOpenCell(Math.floor(ax/NAV),Math.floor(ay/NAV));
+  const g=nearestOpenCell(Math.floor(bx/NAV),Math.floor(by/NAV));
+  if (!s||!g) return null;
+  const start=s[1]*GW+s[0], goal=g[1]*GW+g[0];
+  if (start===goal) return [{x:bx,y:by}];
+  const open=[start], inOpen=new Set([start]);
+  const came=new Map(), gScore=new Map([[start,0]]), fScore=new Map([[start,0]]);
+  let steps=0;
+  while (open.length && steps++<4000){
+    let bi=0; for (let i=1;i<open.length;i++) if ((fScore.get(open[i])||1e9)<(fScore.get(open[bi])||1e9)) bi=i;
+    const cur=open.splice(bi,1)[0]; inOpen.delete(cur);
+    if (cur===goal) break;
+    const cx=cur%GW, cy=(cur/GW)|0;
+    for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
+      if (!dx&&!dy) continue;
+      const nx=cx+dx, ny=cy+dy;
+      if (!cellOpen(nx,ny)) continue;
+      if (dx&&dy && (!cellOpen(cx+dx,cy)||!cellOpen(cx,cy+dy))) continue;  // no diagonal corner-cutting
+      const ni=ny*GW+nx, ng=(gScore.get(cur)||0)+((dx&&dy)?1.414:1);
+      if (ng < (gScore.get(ni)??1e9)){
+        came.set(ni,cur); gScore.set(ni,ng);
+        fScore.set(ni, ng+Math.hypot(nx-g[0],ny-g[1]));
+        if (!inOpen.has(ni)){ open.push(ni); inOpen.add(ni); }
+      }
+    }
+  }
+  if (!came.has(goal)) return null;
+  const cells=[goal]; let c=goal; while (came.has(c)){ c=came.get(c); cells.push(c); } cells.reverse();
+  const pts=cells.map(i=>({ x:(i%GW)*NAV+NAV/2, y:((i/GW)|0)*NAV+NAV/2 }));
+  pts.push({x:bx,y:by});
+  return pts;
+}
+// Follow an A* path to (tx,ty); recompute when the goal moves or the path goes stale.
+// Falls back to local steering if no path exists (e.g. target inside a wall).
+function pathTo(p, tx, ty, dt){
+  p.aiRepath-=dt;
+  const goalMoved = !p.aiPathGoal || Math.hypot(p.aiPathGoal.x-tx,p.aiPathGoal.y-ty)>56;
+  if (!p.aiPath || p.aiRepath<=0 || goalMoved){
+    p.aiPath=navPath(p.x,p.y,tx,ty); p.aiPathI=0;
+    p.aiPathGoal={x:tx,y:ty}; p.aiRepath=0.5+Math.random()*0.4;
+  }
+  if (!p.aiPath || !p.aiPath.length) return steerAvoid(p, tx-p.x, ty-p.y, CFG.aiProbe);
+  while (p.aiPathI<p.aiPath.length-1 && dist(p,p.aiPath[p.aiPathI])<26) p.aiPathI++;
+  const wp=p.aiPath[p.aiPathI];
+  return steerAvoid(p, wp.x-p.x, wp.y-p.y, CFG.aiProbe);
+}
+function nearestCore(p){   // nearest LOOSE, GRABBABLE core (on the ground, unheld) — what a runner wants to grab
+  let best=null,bd=1e9;
+  for (const c of (match.cores||[])){ if(!c.live||c.holder) continue;
+    if(c.grabCd>0 && c.lastHolder===p) continue;   // skip a core this bot just dropped (can't re-grab yet) so it doesn't loiter on it
+    const d=dist(p,c); if(d<bd){bd=d;best=c;} }
+  return best ? {x:best.x,y:best.y} : null;
+}
+function nearestBank(p){   // nearest bank drop-zone — where a carrier runs to score
+  let best=null,bd=1e9;
+  for (const b of (match.banks||[])){ const d=dist(p,b); if(d<bd){bd=d;best=b;} }
+  return best ? {x:best.x,y:best.y} : null;
+}
+// nearest STEALABLE core carrier within a bot's awareness — a runner it can charge into to knock the
+// core loose (collision steal). Skips carriers that are grace-protected/immune (a wasted chase) and IT.
+function nearestCarrier(p){
+  let best=null,bd=1e9;
+  for (const q of players){
+    if (q===p || !q.carrying || q.isIt || q.role==="interference" || q.immunity>0 || q.grabGraceT>0) continue;
+    const d=dist(p,q); if (d<CFG.aiStealSense && d<bd){ bd=d; best=q; }
+  }
+  return best;
+}
+// nearest CLOSED door within a runner's reach (so bots open one blocking their route)
+function doorInWay(p){
+  for (const d of (match.doors||[])){ if(d.open) continue;
+    const c={x:d.x+d.w/2,y:d.y+d.h/2};
+    if (dist(p,c) < Math.max(d.w,d.h)/2+CFG.radius+30) return d;
+  }
+  return null;
+}
+
+// ============================================================
+// INTENT
+// ============================================================
+function humanIntent(){
+  const mv=readMoveKeys();
+  return { dx:mv.dx, dy:mv.dy, moving:mv.moving, dash:tapDash, door:tapDoor, abil:tapAbil };
+}
+// light bot use of the class ability (runners only; abilities are disabled while IT)
+function aiAbility(p, it, dt){
+  if (p.abilCdT>0 || match.phase==="grace") return false;
+  if (p.cls==="warden") return it && dist(p,it)<130 && !losBlocked(p,it);            // blink away (flee heading already points away)
+  if (p.cls==="bulwark") return it && dist(p,it)<250 && !losBlocked(p,it) && Math.random()<2.2*dt;  // wall IT off
+  if (p.cls==="striker"){                                                            // lunge a nearby rival to steal points
+    for (const q of activePlayers()){ if (q===p||q.isIt) continue;
+      if (dist(p,q)<115 && !losBlocked(p,q)){ p.heading=Math.atan2(q.y-p.y,q.x-p.x); return true; } }
+  }
+  return false;
+}
+function aiIntent(p, dt){
+  const it = itIndex>=0 ? players[itIndex] : null;
+  p.aiDashT-=dt;
+
+  // --- IT bot: only chases runners it can actually SEE (LOS + range). Loses them
+  //     around corners -> paths to last-known spot, then patrols circles to ambush.
+  //     No longer omniscient, so breaking line of sight is a real escape. ---
+  if (p.isIt){
+    let seen=null, best=1e9;
+    for (const q of activePlayers()){ if (q===p||q.immunity>0) continue; const d=dist(p,q);
+      if (d<CFG.aiItSense && d<best && !losBlocked(p,q)){ best=d; seen=q; } }
+    if (seen){ p.aiTarget={x:seen.x,y:seen.y}; p.aiSeen=0.9; p.aiItSpot=(p.aiItSpot||0)+dt; }   // shorter memory: breaking LOS shakes it faster
+    else { p.aiSeen-=dt; p.aiItSpot=0; }                          // lose sight -> must re-acquire before it can pounce again
+    // pick where to move: toward a seen/remembered target, else patrol a circle
+    let goal;
+    if (p.aiSeen>0 && p.aiTarget){ goal=p.aiTarget; }
+    else { if (!p.aiPatrol || dist(p,p.aiPatrol)<90) p.aiPatrol=nearestBank(p)||nearestCore(p)||randOpenPoint(); goal=p.aiPatrol; }  // IT lurks where carriers must go
+    let dir;
+    if (seen && best<230){                                 // tight chase: steer directly (grid too coarse up close)
+      const tx=seen.x+seen.vx*0.16, ty=seen.y+seen.vy*0.16;
+      dir=steerAvoid(p, tx-p.x, ty-p.y, CFG.aiProbe);
+    } else { dir=pathTo(p, goal.x, goal.y, dt); }
+    let dash=false;
+    if (seen && p.aiDashT<=0 && best>60 && best<120 && (p.aiItSpot||0)>CFG.aiItReact && !losBlocked(p,seen)){ dash=true; p.aiDashT=0.9+Math.random()*0.7; }  // only a short, telegraphed lunge — never a burst the instant it clears a corner
+    return { dx:dir.dx, dy:dir.dy, moving:true, dash, door:false, abil:false };  // IT can't toggle doors or use abilities
+  }
+
+  // --- runner bot: limited awareness -> roam/work circles when unaware, flee (imperfectly) when it spots IT ---
+  p.aiErrT-=dt; if (p.aiErrT<=0){ p.aiErrT=0.4+Math.random()*0.4; p.aiErr=(Math.random()*2-1)*CFG.aiFleeError; }
+
+  // stuck watchdog: if it wants to move but has barely moved, it's grinding a wall -> pick a fresh goal
+  if (p.speed<45){ p.aiStuck+=dt; } else { p.aiStuck=0; }
+  if (p.aiStuck>0.55){ p.aiStuck=0; p.aiTarget=randOpenPoint(); }
+
+  if (it && match.phase!=="grace" && dist(p,it)<CFG.aiSenseRadius && !losBlocked(p,it)){
+    p.aiLastIt={x:it.x,y:it.y}; p.aiSeen=1.6;
+    if (!p.aiKnows) p.aiAlertT=CFG.aiReaction; // reaction delay on first spotting
+    p.aiKnows=true;
+  } else { p.aiSeen-=dt; if (p.aiSeen<=0) p.aiKnows=false; }
+  if (p.aiAlertT>0) p.aiAlertT-=dt;
+
+  if (p.aiKnows && p.aiAlertT<=0){
+    // FLEE from last-known IT position, with wobble, avoiding walls
+    let dx=p.x-p.aiLastIt.x, dy=p.y-p.aiLastIt.y; const d=Math.hypot(dx,dy)||1;
+    const a=Math.atan2(dy/d,dx/d)+p.aiErr;
+    const s=steerAvoid(p,Math.cos(a),Math.sin(a),CFG.aiProbe);
+    const near = it && dist(p,it)<190;
+    let dash=false; if (near && p.aiDashT<=0){ dash=true; p.aiDashT=0.9+Math.random(); }  // burst away
+    const door = near && p.doorCdT<=0 && Math.random()<1.2*dt;   // slam a door to juke
+    return { dx:s.dx, dy:s.dy, moving:true, dash, door, abil:aiAbility(p,it,dt) };
+  }
+  // ROAM: carrying a core -> run it to the bank. Otherwise decide between GRABBING a loose core and
+  // HUNTING a nearby carrier to knock its core loose (collision steal). Hunting wins when a carrier is
+  // in range and roughly as close as (or closer than) the nearest loose core — so bots actively pressure
+  // whoever's holding, including you, instead of only ever farming loose cores.
+  let hunting=false;
+  if (p.carrying){ p.aiTarget = nearestBank(p) || randOpenPoint(); }
+  else {
+    const core = nearestCore(p), carrier = nearestCarrier(p);
+    if (carrier && (!core || dist(p,carrier) <= dist(p,core)*CFG.aiHuntBias)){ p.aiTarget = carrier; hunting=true; }
+    else if (core){ p.aiTarget = core; }
+    else if (!p.aiTarget || dist(p,p.aiTarget)<64){ p.aiTarget = randOpenPoint(); }
+  }
+  // the pickup radius (~28px) is smaller than the coarse nav "arrived" gap, so a bot could idle ~40px
+  // short of a target forever. On the final approach steer STRAIGHT at it so it closes the gap.
+  const close = dist(p,p.aiTarget)<130;
+  const dir = close ? steerAvoid(p, p.aiTarget.x-p.x, p.aiTarget.y-p.y, CFG.aiProbe) : pathTo(p, p.aiTarget.x, p.aiTarget.y, dt);
+  // when hunting, burst INTO the carrier on the final approach (speed>stealMinSpeed guarantees the pop)
+  let dash=false; if (hunting && close && dist(p,p.aiTarget)<70 && p.dashCharges>0 && p.aiDashT<=0){ dash=true; p.aiDashT=1.4+Math.random(); }
+  const door = !!doorInWay(p) && p.doorCdT<=0;   // open a closed door blocking the route (bots don't slam while roaming)
+  return { dx:dir.dx, dy:dir.dy, moving:true, dash, door, abil:aiAbility(p,it,dt) };
+}
+
+// ============================================================
+// MOVEMENT / DASH / TAG / DOORS
+// ============================================================
+function stepMovement(p, intent, dt){
+  if (p.stun>0){ p.stun-=dt; intent={dx:0,dy:0,moving:false,dash:false,door:false}; }
+  // (no break-freeze: IT pushes against the closed door — collision stops forward motion while the break
+  //  charges — so it can always peel off instead of being glued to the animation)
+  // dash charge regen
+  p.dashCdT=Math.max(0,p.dashCdT-dt);
+  if (p.dashCharges<CFG.dashCharges){ p.dashRegenT-=dt; if (p.dashRegenT<=0){ p.dashCharges++; p.dashRegenT=CFG.dashRegen; } }
+  // trigger a dash (fluid burst — a "miss" is just a reposition, no whiff). Everyone dashes instantly,
+  // IT included (the old IT wind-up telegraph was cut — didn't feel good).
+  if (intent.dash && p.dashCharges>0 && p.dashCdT<=0 && p.stun<=0){
+    let dx=intent.moving?intent.dx:Math.cos(p.heading), dy=intent.moving?intent.dy:Math.sin(p.heading);
+    const m=Math.hypot(dx,dy)||1; const dir={x:dx/m,y:dy/m};
+    p.dash.dir=dir; p.dash.t=CFG.dashTime;
+    p.dashCharges--; p.dashCdT=CFG.dashTime+CFG.dashCd; if (p.dashRegenT<=0) p.dashRegenT=CFG.dashRegen;
+    spawnBurst(p.x,p.y,p.isIt?"#ff9a9a":"#dff1ff",8,150,0.3); addShake(2);
+    if (p.human||earshot(p.x,p.y)) sfx("dash");
+  }
+  const carrySlow=p.carrying?CFG.carrySlow:1;   // hauling a core taxes your speed (the risk of greed)
+  const maxSpeed=(p.isIt?CFG.itMaxSpeed*p.itMult:CFG.runnerMaxSpeed)*(p.buffed?1.12:1)*(p.doorSlowT>0?CFG.doorSlow:1)*carrySlow;
+  const baseAccel=p.isIt?CFG.itAccel:CFG.runnerAccel;
+
+  if (p.dash.t>0){
+    p.dash.t-=dt;
+    // steer the dash: rotate its direction toward the held input at the enhanced dash turn-rate.
+    // This is the agency/dodge tech — you can curve a dash around a corner or juke past IT.
+    if (intent.moving){
+      const turn=CFG.dashTurn*(p.isIt?CFG.itDashTurnMult:1);   // runners bend the dash tighter than IT
+      const cur=Math.atan2(p.dash.dir.y,p.dash.dir.x), want=Math.atan2(intent.dy,intent.dx);
+      let da=want-cur; while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
+      const step=Math.max(-turn*dt, Math.min(turn*dt, da));
+      const na=cur+step; p.dash.dir={x:Math.cos(na),y:Math.sin(na)};
+    }
+    p.heading=Math.atan2(p.dash.dir.y,p.dash.dir.x);
+    const dspd=CFG.dashSpeed;
+    p.vx=p.dash.dir.x*dspd; p.vy=p.dash.dir.y*dspd;
+  } else {
+    let s=Math.hypot(p.vx,p.vy);
+    if (s>maxSpeed+1 && p.stun<=0){                      // bleed dash momentum smoothly, still steerable
+                                                         // (skipped while stunned so a Striker launch flies its full arc)
+      const ns=Math.max(maxSpeed, s-CFG.decel*1.8*dt); p.vx=p.vx/s*ns; p.vy=p.vy/s*ns;
+      if (intent.moving){ const a=baseAccel*0.4*dt; p.vx+=intent.dx*a; p.vy+=intent.dy*a; p.heading=Math.atan2(intent.dy,intent.dx); }
+    } else if (intent.moving){
+      p.heading=Math.atan2(intent.dy,intent.dx);
+      const dvx=intent.dx*maxSpeed-p.vx, dvy=intent.dy*maxSpeed-p.vy, dm=Math.hypot(dvx,dvy), cap=baseAccel*dt;
+      if (dm>cap && dm>0){ p.vx+=dvx/dm*cap; p.vy+=dvy/dm*cap; } else { p.vx+=dvx; p.vy+=dvy; }
+      s=Math.hypot(p.vx,p.vy); if (s>maxSpeed){ p.vx=p.vx/s*maxSpeed; p.vy=p.vy/s*maxSpeed; }
+    } else {
+      const ns=moveToward(s,0,CFG.decel*dt); if (s>0.001){ p.vx=p.vx/s*ns; p.vy=p.vy/s*ns; }
+    }
+  }
+  p.x+=p.vx*dt; p.y+=p.vy*dt; collide(p);
+}
+function passIt(fromIdx, toIdx, stunNew){
+  const from=players[fromIdx], to=players[toIdx];
+  if (from){ from.isIt=false; from.hold=0; from.itMult=1; if (fromIdx!==toIdx) from.immunity=CFG.tagbackImmunity; }
+  to.isIt=true; to.hold=0; to.itMult=1; to.aiming=false; dropCore(to);   // IT can't carry/aim — becoming IT fumbles the core
+  if (stunNew) to.stun=CFG.tagStun; itIndex=toIdx;
+}
+// Touch-tag: IT tags anyone it's touching. Walls can't be tagged through because
+// collision keeps bodies apart, so no line-of-sight check is needed.
+function checkTag(){
+  if (itIndex<0) return;
+  const it=players[itIndex]; if (it.stun>0) return;
+  const R=CFG.radius*2+CFG.tagPad;
+  for (let i=0;i<players.length;i++){
+    const q=players[i];
+    if (q===it || q.role==="interference" || q.immunity>0 || q.stun>0) continue;
+    if (dist(it,q)<R){
+      spawnBurst(q.x,q.y,"#ffd0d0",18,240,0.5); spawnRing(q.x,q.y,"#ff6a6a",72); addShake(11);
+      if (it.human||q.human||earshot(q.x,q.y)) sfx("tag");
+      passIt(itIndex,i,true); feed(it.name+" tagged "+q.name); return;
+    }
+  }
+}
+// Toggle the nearest door within reach (runners only). Closed doors block move + sight.
+// IT can't toggle — it has to BREAK a closed door (see updateDoorBreak), which costs it time.
+function tryDoor(p){
+  if (p.isIt || p.role==="interference" || p.doorCdT>0 || !match.doors) return;
+  let best=null, bd=1e9;
+  for (const d of match.doors){ const c={x:d.x+d.w/2,y:d.y+d.h/2}, dd=dist(p,c); if (dd<bd){ bd=dd; best=d; } }
+  if (best && bd < Math.max(best.w,best.h)/2 + CFG.radius + 30){
+    best.open=!best.open; p.doorCdT=CFG.doorCd;
+    const c={x:best.x+best.w/2,y:best.y+best.h/2};
+    spawnRing(c.x,c.y, best.open?"#9fdcff":"#ffb84d", 42);
+    if (p.human||earshot(c.x,c.y)) sfx(best.open?"doorOpen":"doorClose");
+    feed(p.name+(best.open?" opened":" slammed")+" a door");
+  }
+}
+// IT breaks a closed door it's pressed against — a channel that STOPS it (collision already
+// blocks its path), so a slammed door reliably buys the runner distance. This is the pallet.
+function updateDoorBreak(p, intent, dt){
+  if (!p.isIt || !match.doors){ p.breakDoor=null; p.breakT=0; return; }
+  let touching=null;
+  for (const d of match.doors){ if (d.open) continue;
+    const cx=Math.max(d.x,Math.min(p.x,d.x+d.w)), cy=Math.max(d.y,Math.min(p.y,d.y+d.h));
+    if (Math.hypot(p.x-cx,p.y-cy) < CFG.radius+7){ touching=d; break; }
+  }
+  if (!touching){ p.breakDoor=null; p.breakT=0; return; }
+  // Only PROGRESS the break while IT is actively pushing INTO the door (intent points at it). If IT
+  // stops or turns away, the charge drains and IT is free to move — no getting glued to the animation.
+  const c0={x:touching.x+touching.w/2, y:touching.y+touching.h/2};
+  let pushing=false;
+  if (intent && intent.moving){ const dx=c0.x-p.x, dy=c0.y-p.y, m=Math.hypot(dx,dy)||1;
+    pushing = (intent.dx*dx + intent.dy*dy)/m > 0.35; }   // heading roughly toward the door
+  if (!pushing){ p.breakT=Math.max(0, p.breakT-dt*2.5); if (p.breakT<=0) p.breakDoor=null; return; }  // drain, don't freeze
+  if (p.breakDoor!==touching){ p.breakDoor=touching; p.breakT=0; }
+  p.breakT+=dt;
+  const c={x:touching.x+touching.w/2,y:touching.y+touching.h/2};
+  if (p.breakT % 0.12 < dt) spawnBurst(c.x,c.y,"#caa06a",2,60,0.25);
+  if (p.breakT>=CFG.doorBreakTime){
+    touching.open=true; p.breakDoor=null; p.breakT=0; p.doorSlowT=0.6;
+    spawnBurst(c.x,c.y,"#b98a52",14,180,0.5); spawnRing(c.x,c.y,"#ff8a4d",50); addShake(5);
+    if (p.human||earshot(c.x,c.y)) sfx("doorBreak");
+    feed(p.name+" broke a door");
+  }
+}
+
+// ============================================================
+// CLASS ABILITIES (Q) — disabled while IT
+// ============================================================
+// is a point blocked by any obstacle (walls + closed doors + hazards), body-radius aware
+function blockedAt(x,y){
+  for (const w of obstacles){
+    const nx=clamp(x,w.x,w.x+w.w), ny=clamp(y,w.y,w.y+w.h);
+    if (Math.hypot(x-nx,y-ny) < CFG.radius) return true;
+  }
+  return false;
+}
+function tickAbility(p, dt){
+  p.abilCdT=Math.max(0,p.abilCdT-dt);
+  if (p.shoveT>0) p.shoveT-=dt;
+  if (p.blinkT>0) p.blinkT-=dt;
+}
+function useAbility(p){
+  if (p.isIt || p.role==="interference" || p.abilCdT>0 || p.stun>0 || p.breakDoor) return;
+  const c=clsById(p.cls);
+  // aim: humans point with the cursor, bots point at whatever aiAbility locked into p.heading
+  let ax=Math.cos(p.heading), ay=Math.sin(p.heading);
+  if (p.cls==="striker"){
+    // Shove: the striker stays put and knocks a rival in the AIMED direction. Works on ANYONE
+    // (including IT — a knocked IT can't tag while stunned). Humans get aim-assist so a shove that
+    // clearly should connect does.
+    // aim direction is the cursor for humans (independent of body facing), p.heading for bots
+    let aimAng=p.human?p.aimAng:p.heading;
+    const valid=q => q!==p && q.role!=="interference" && q.immunity<=0 && dist(p,q)<=CFG.strikeRange && !losBlocked(p,q);
+    if (p.human){                                                    // aim-assist: snap the blast onto the nearest target inside a forgiving cone
+      let bestQ=null,bestAbs=1e9;
+      for (const q of players){ if (!valid(q)) continue;
+        let da=Math.atan2(q.y-p.y,q.x-p.x)-aimAng; while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
+        if (Math.abs(da)<bestAbs){ bestAbs=Math.abs(da); bestQ=q; } }
+      if (bestQ && bestAbs<CFG.strikeCone*1.05){ aimAng=Math.atan2(bestQ.y-p.y,bestQ.x-p.x); }   // gentle snap only when the cursor is already near a target (respects where you point)
+    }
+    const kx=Math.cos(aimAng), ky=Math.sin(aimAng);
+    let hit=0;
+    for (const q of players){
+      if (!valid(q)) continue;
+      let da=Math.atan2(q.y-p.y,q.x-p.x)-aimAng; while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
+      if (Math.abs(da)>CFG.strikeCone) continue;                     // must be inside the aimed cone
+      q.vx=kx*CFG.strikeKnock; q.vy=ky*CFG.strikeKnock; q.stun=CFG.strikeStun;
+      if (!q.isIt) q.abilCdT=Math.max(q.abilCdT, CFG.shovedLockout);  // can't instantly counter-shove (IT has no ability to lock)
+      const stole=!!q.carrying; dropCore(q);                          // shoving a carrier makes them fumble the core
+      spawnBurst(q.x,q.y,"#ffb060",12,190,0.45); spawnRing(q.x,q.y,c.accent,58);
+      feed(p.name+(stole?" shoved the core loose from ":" shoved ")+(q.isIt?"IT off "+q.name:q.name)); hit++;
+    }
+    // the shove itself: a big directional blast — the striker does NOT move
+    p.abilCdT=c.cd; addShake(hit?7:4);
+    spawnRing(p.x,p.y,"#fff2d0",CFG.strikeRange*0.7);              // white core-flash ring at the striker
+    spawnRing(p.x,p.y,c.accent,CFG.strikeRange*1.05);             // accent shockwave riding out
+    for (let i=0;i<18;i++){ const sa=aimAng+(Math.random()*2-1)*CFG.strikeCone, sd=60+Math.random()*(CFG.strikeRange);
+      effects.particles.push({ x:p.x+Math.cos(sa)*30, y:p.y+Math.sin(sa)*30, vx:Math.cos(sa)*sd*3.4, vy:Math.sin(sa)*sd*3.4,
+        life:0.30, max:0.30, color:i%3?c.accent:"#ffffff", size:2.6 }); }
+    p.shoveT=0.34; p.shoveAng=aimAng;                               // telegraph of the shove arc (render); longer = readable
+    if (p.human||earshot(p.x,p.y)) sfx(hit?"tag":"dash");
+  } else if (p.cls==="bulwark"){
+    // Bunker: 4 energy walls snap up in a box around you. Only YOU can pass (passOwner); see-through (noLos).
+    const R=CFG.cageRad, T=CFG.cageThick, cx=p.x, cy=p.y;
+    const segs=[ {x:cx-R,y:cy-R,   w:2*R,h:T},   {x:cx-R,y:cy+R-T, w:2*R,h:T},    // top / bottom
+                 {x:cx-R,y:cy-R,   w:T,h:2*R},   {x:cx+R-T,y:cy-R, w:T,h:2*R} ];  // left / right
+    for (const s of segs) match.hazards.push({ x:s.x,y:s.y,w:s.w,h:s.h, life:CFG.cageLife, maxLife:CFG.cageLife, owner:p.name, passOwner:p, col:c.accent, noLos:true, cage:true });
+    p.abilCdT=c.cd; spawnRing(cx,cy,c.accent,R+16); addShake(4);
+    if (p.human||earshot(cx,cy)) sfx("gate");
+  } else if (p.cls==="warden"){
+    // Phase Dash: capped blink in facing dir that travels THROUGH walls. Scan outward to the max
+    // reach, then land on the FARTHEST clear cell at-or-before it (so it never ends inside a wall) —
+    // this lets the Warden punch to the far side of a wall the way nothing else can.
+    const fx=Math.cos(p.heading), fy=Math.sin(p.heading);
+    let tx=p.x, ty=p.y;
+    for (let d=CFG.blinkDist; d>=CFG.blinkStep; d-=CFG.blinkStep){   // outermost clear landing first
+      const nx=p.x+fx*d, ny=p.y+fy*d;
+      if (!blockedAt(nx,ny)){ tx=nx; ty=ny; break; }   // blockedAt already rejects the border walls
+    }
+    spawnBurst(p.x,p.y,c.accent,14,240,0.4);
+    p.x=tx; p.y=ty; p.vx*=0.4; p.vy*=0.4; collide(p); p.blinkT=0.2;
+    p.abilCdT=c.cd; spawnRing(p.x,p.y,c.accent,52); addShake(3);
+    if (p.human||earshot(p.x,p.y)) sfx("doorOpen");
+  }
+}
+// COLLISION STEAL — runs once per frame (host/single). If a moving non-IT runner overlaps a core
+// carrier, the carrier fumbles it and the core pops out along the HITTER's travel direction (ahead of
+// them). Single-target + a brief immunity, so no crowd-spam and no chained knock-arounds.
+function checkSteals(){
+  for (const p of players){
+    if (p.isIt || p.role==="interference" || p.carrying || p.stun>0 || p.culledAt>=0) continue;
+    if (p.stealCdT>0) continue;                                // just knocked one loose — brief cooldown kills the ping-pong
+    if (p.speed < CFG.stealMinSpeed) continue;                 // must actually be moving into them (a check, not a nudge)
+    for (const q of players){
+      if (q===p || !q.carrying || q.isIt || q.role==="interference" || q.immunity>0 || q.grabGraceT>0) continue;
+      if (dist(p,q) > CFG.stealDist+CFG.radius) continue;
+      // pop the core out in the hitter's direction of travel (or facing if nearly still)
+      const sp=Math.hypot(p.vx,p.vy)||1, dx=(sp>40?p.vx/sp:Math.cos(p.heading)), dy=(sp>40?p.vy/sp:Math.sin(p.heading));
+      const cr=q.carrying; dropCore(q);
+      cr.x=clamp(q.x+dx*CFG.stealPop, 30, WORLD_W-30); cr.y=clamp(q.y+dy*CFG.stealPop, 30, WORLD_H-30);
+      q.immunity=Math.max(q.immunity, CFG.stealImmune);        // brief grace so it can't be re-stolen instantly
+      p.stealCdT=CFG.stealCd;                                  // the hitter must wait before knocking another loose
+      spawnBurst(q.x,q.y,"#ffce6a",10,170,0.4); addShake(2);
+      if (p.human||q.human||earshot(q.x,q.y)) sfx("tag");
+      feed(p.name+" knocked the core loose from "+q.name);
+      break;                                                   // one steal per hitter per frame
+    }
+  }
+}
+
+// ============================================================
+// INTERFERENCE
+// ============================================================
+function dropGate(p){                                  // ghost drops a temporary block (costs a charge)
+  if (p.blockCharges<=0) return;
+  const s=CFG.blockSize;
+  match.hazards.push({ x:p.x-s/2, y:p.y-s/2, w:s, h:s, life:CFG.blockLife, maxLife:CFG.blockLife, owner:p.name, block:true });
+  p.blockCharges--; if (p.blockRegenT<=0) p.blockRegenT=CFG.blockRegen;
+  if (p.human||earshot(p.x,p.y)) sfx("gate");        // ghosts are OUT — meddling earns no score
+  spawnRing(p.x,p.y,"#a98bff",64); feed(p.name+" dropped a block");
+}
+function beacon(p){ match.beaconTimer=CFG.beaconReveal; p.beaconCdT=CFG.beaconCd; sfx("gate"); feed(p.name+" revealed IT"); }   // no score — they're out
+function updateInterference(p, dt){
+  p.beaconCdT=Math.max(0,p.beaconCdT-dt);
+  if (p.blockCharges<CFG.blockCharges){ p.blockRegenT-=dt;                 // recharge block charges one at a time
+    if (p.blockRegenT<=0){ p.blockCharges++; p.blockRegenT=(p.blockCharges<CFG.blockCharges)?CFG.blockRegen:0; } }
+  let mv;
+  if (p.human){ mv=readMoveKeys();
+    if ((tapDoor||tapAbil) && p.blockCharges>0) dropGate(p);               // LMB / R-click — drop a block
+    if (tapDash && p.beaconCdT<=0) beacon(p);                             // Space — reveal IT
+  } else {
+    p.aiTimer-=dt; if(p.aiTimer<=0){p.aiTimer=0.8+Math.random(); p.aiWander={x:Math.random()*2-1,y:Math.random()*2-1};}
+    mv={dx:p.aiWander.x, dy:p.aiWander.y}; const m=Math.hypot(mv.dx,mv.dy)||1; mv.dx/=m; mv.dy/=m;
+    if (p.blockCharges>0 && Math.random()<0.4*dt) dropGate(p);
+    if (p.beaconCdT<=0 && Math.random()<0.3*dt) beacon(p);
+  }
+  p.x=clamp(p.x+mv.dx*CFG.interfSpeed*dt, 20, WORLD_W-20);                 // phases through walls (no collide)
+  p.y=clamp(p.y+mv.dy*CFG.interfSpeed*dt, 20, WORLD_H-20);
+}
+
+// ============================================================
+// MATCH FLOW
+// ============================================================
+// Banks: drop-zones at RANDOM open spots, kept spread apart. Relocated every cull so the
+// hot zones keep shifting and nobody can just park on a known bank.
+function makeBanks(){
+  const banks=[];
+  for (let i=0;i<CFG.bankCount;i++){
+    let chosen=null;
+    for (let tries=0;tries<24;tries++){ const q=randOpenPoint();
+      let ok=true; for (const b of banks){ if (dist(q,b)<CFG.bankSpread){ ok=false; break; } }
+      chosen=q; if (ok) break; }               // best-effort spread; take the last try if none clear
+    banks.push({ x:chosen.x, y:chosen.y });
+  }
+  return banks;
+}
+// move ONE bank to a fresh open spot — called when a core is deposited into it (no camping a bank)
+function relocateBank(b){
+  let q=null;
+  for (let tries=0;tries<24;tries++){ q=randOpenPoint();
+    let ok=true; for (const o of match.banks){ if(o!==b && dist(q,o)<CFG.bankSpread){ ok=false; break; } }
+    if (ok) break; }
+  if (q){ b.x=q.x; b.y=q.y; }
+}
+// on each cull: shuffle the banks and re-scatter the loose cores (carried cores stay with their carrier)
+function relocateObjectives(){
+  match.banks=makeBanks();
+  for (const c of match.cores){ if (c.live && !c.holder){ const q=randCorePoint(); c.x=q.x; c.y=q.y; } }
+  feed("the vault relocated");
+}
+// value = persistent bankable bonus on the core; grows while ANY runner holds it, and STAYS when
+// dropped (a dropped core is "hot" — worth more than a fresh one, so a fumble near a bank is high drama).
+function randCorePoint(){   // an open spot kept clear of every bank, so cores never spawn next to a drop-zone
+  for (let i=0;i<24;i++){ const q=randOpenPoint();
+    let ok=true; for (const b of (match.banks||[])){ if (dist(q,b)<CFG.coreBankBuffer){ ok=false; break; } }
+    if (ok) return q; }
+  return randOpenPoint();
+}
+function spawnCore(){ const q=randCorePoint(); return { x:q.x, y:q.y, holder:null, value:0, live:true, cd:0, grabCd:0, lastHolder:null }; }
+function dropCore(p){       // p fumbles whatever it's carrying — the core lands loose + grabbable
+  const c=p&&p.carrying; if (!c) return;
+  const a=Math.random()*Math.PI*2, s=CFG.dropScatter;
+  c.x=clamp(p.x+Math.cos(a)*s, 30, WORLD_W-30); c.y=clamp(p.y+Math.sin(a)*s, 30, WORLD_H-30);
+  c.holder=null; c.grabCd=0.4; c.lastHolder=p;   // value persists; grace so the fumbler can't instantly re-grab
+  p.carrying=null;
+  spawnBurst(c.x,c.y,"#ffe08a",14,220,0.45); if (earshot(c.x,c.y)) sfx("drain");
+}
+function startLive(){
+  match.phase="live"; match.elapsed=0;
+  match.banks=makeBanks();
+  match.cores=[]; for (let i=0;i<CFG.coreCount;i++) match.cores.push(spawnCore());
+  const act=activePlayers();
+  passIt(-1, players.indexOf(act[Math.floor(Math.random()*act.length)]), false);
+  sfx("it");
+  feed(players[itIndex].name+" is IT");
+}
+// Carry-and-bank: grab a loose core, run it to a bank to score. Carrying slows you + lights you up.
+// Tagged or shoved -> you drop it (a loose scramble). IT can't carry or bank.
+function updateCores(dt){
+  const you=players[0];
+  for (const c of match.cores){
+    if (c.grabCd>0) c.grabCd-=dt;
+    if (!c.live){ c.cd-=dt; if (c.cd<=0) Object.assign(c, spawnCore()); continue; }
+    if (c.holder){
+      const h=c.holder;
+      // stale holder guard (culled / turned IT / left) -> drop
+      if (h.isIt || h.role==="interference" || h.culledAt>=0 || h.carrying!==c){
+        if (h.carrying===c) dropCore(h); else c.holder=null;   // release the core either way (no dangling holder)
+        continue; }
+      c.x=h.x; c.y=h.y; c.value=Math.min(CFG.carryGrowCap, c.value+CFG.carryGrow*dt);   // greed ticks up while carried
+      // bank it?
+      for (const b of match.banks){
+        if (dist(h,b)<CFG.bankRadius){
+          const gained=CFG.carryValue+c.value; h.score+=gained;
+          spawnRing(b.x,b.y,"#8fe0ff",CFG.bankRadius+18); spawnBurst(b.x,b.y,"#bfe9ff",16,240,0.5); addShake(4);
+          if (h.human||earshot(b.x,b.y)) sfx("drain");
+          feed(h.name+" banked +"+Math.round(gained));
+          c.live=false; c.cd=CFG.coreRespawn; c.holder=null; c.value=0; h.carrying=null;
+          relocateBank(b);                                 // the circle jumps to a new spot after a deposit
+          break;
+        }
+      }
+    } else {
+      // loose core: nearest eligible runner in reach grabs it
+      for (const p of players){
+        if (p.isIt || p.role==="interference" || p.stun>0 || p.carrying || p.culledAt>=0) continue;
+        if (c.grabCd>0 && p===c.lastHolder) continue;
+        if (dist(p,c)<CFG.radius+CFG.coreRadius){
+          c.holder=p; c.lastHolder=p; p.carrying=c;               // value carries over (hot cores stay valuable)
+          p.grabGraceT=CFG.grabGrace;                            // a beat where the fresh grab can't be knocked loose
+          spawnRing(c.x,c.y,"#ffe08a",30); if (p.human||earshot(c.x,c.y)) sfx("enter");
+          feed(p.name+" grabbed a core"); break;
+        }
+      }
+    }
+  }
+}
+function cull(){
+  const act=activePlayers(); if (act.length<=3) return;
+  let worst=act[0]; for (const q of act) if (q.score<worst.score) worst=q;   // LOWEST score gets cut
+  const wi=players.indexOf(worst);
+  if (worst.isIt){ let low=null;                                    // IT got culled -> LOWEST-score survivor becomes IT
+    for (const q of act){ if(q===worst) continue; if(!low||q.score<low.score) low=q; }
+    if (low) passIt(wi, players.indexOf(low), false); }
+  dropCore(worst);                                   // culled mid-carry -> fumble the core for the survivors
+  worst.role="interference"; worst.isIt=false; worst.aiming=false;
+  worst.blockCharges=CFG.blockCharges; worst.blockRegenT=0; worst.beaconCdT=0; worst.culledAt=cullSeq++;
+  relocateObjectives();                              // shuffle banks + loose cores each cull
+  spawnBurst(worst.x,worst.y,"#c9b8ff",16,190,0.6); spawnRing(worst.x,worst.y,"#a98bff",62); addShake(6);
+  sfx("cull");
+  feed(worst.name+" was culled  (lowest score)");
+  announce(worst.name+" CULLED", (worst.human?"you're OUT — now meddle":"lowest score, eliminated"), 2.4, worst.human?"#ff8a8a":"#c9b8ff");
+}
+function startShowdown(){
+  match.phase="showdown"; match.t=CFG.showdownTime; sfx("showdown");
+  const finalists=activePlayers();
+  let worst=finalists[0], bestP=finalists[0];
+  for (const q of finalists){ if (q.score<worst.score) worst=q; if (q.score>bestP.score) bestP=q; }
+  // fresh finale: scores reset, but your match performance seeds the start —
+  // top scorer gets a speed buff, lowest starts IT. Most points in 60s wins.
+  for (const q of finalists){ q.score=0; q.hold=0; q.buffed=false; dropCore(q); }
+  match.cores=[]; for (let i=0;i<CFG.coreCount;i++) match.cores.push(spawnCore());   // fresh cores for the finale
+  bestP.buffed=true; passIt(-1, players.indexOf(worst), false);
+  feed("SHOWDOWN — scores reset. "+bestP.name+" seeded fastest, "+worst.name+" starts IT.");
+  announce("SHOWDOWN", "final 3 · scores reset · most points in "+CFG.showdownTime+"s wins", 2.8, "#7fd1ff");
+}
+function finishMatch(){
+  // finalists (who made the Showdown) take places 1-3 by their finale score;
+  // culled players rank below, by the score they had when cut.
+  const finalists=activePlayers().slice().sort((a,b)=> b.score-a.score);
+  const culled=players.filter(p=>p.role==="interference").sort((a,b)=> b.score-a.score);
+  match.results=finalists.concat(culled);
+  match.results.forEach((p,i)=> p.place=i+1);
+  match.phase="over";
+}
+function updateMatch(dt){
+  for (let i=match.hazards.length-1;i>=0;i--){ match.hazards[i].life-=dt; if (match.hazards[i].life<=0) match.hazards.splice(i,1); }
+  if (match.beaconTimer>0) match.beaconTimer-=dt;
+  if (match.announce){ match.announce.t-=dt; if (match.announce.t<=0) match.announce=null; }
+  if (match.phase==="grace"){ match.t-=dt; if (match.t<=0) startLive(); }
+  else if (match.phase==="live"){ match.elapsed+=dt;
+    if (match.marksLeft.length && match.elapsed>=match.marksLeft[0]){ match.marksLeft.shift(); cull();
+      if (activePlayers().length<=3) startShowdown(); } }
+  else if (match.phase==="showdown"){ match.t-=dt; if (match.t<=0) finishMatch(); }
+}
+
+// ============================================================
+// LOOP
+// ============================================================
+let last=performance.now();
+// ============================================================
+// NETWORK — host-authoritative P2P (one player hosts in-browser, friends join by code via PeerJS).
+// Host runs the sim; remote players are driven by inputs they send; host broadcasts world snapshots.
+// Clients don't simulate — they send input + render the latest snapshot. No server to run/pay for.
+// (Walls/door-geometry/motes are deterministic, so only dynamic state travels.)
+// ============================================================
+const net = { mode:null, peer:null, id:null, conns:[], selfSlot:0, inputs:{}, lastSnap:null, snapT:0, snapHz:20, status:"", waiting:false };
+function setNet(html, cls){ const b=document.getElementById("netbox"); if(b) b.innerHTML = cls? "<span class='"+cls+"'>"+html+"</span>" : html; }
+function netTeardown(){ if(net.peer){ try{net.peer.destroy();}catch(e){} } net.mode=null; net.peer=null; net.id=null; net.conns=[]; net.inputs={}; net.lastSnap=null; net.selfSlot=0; net.waiting=false; }
+
+function hostGame(){
+  if (typeof Peer==="undefined"){ setNet("multiplayer needs an internet connection (PeerJS didn't load)","warn"); return; }
+  netTeardown(); net.mode="host"; net.selfSlot=0;
+  setNet("connecting…");
+  net.peer=new Peer(undefined,{debug:1});
+  net.peer.on("open", id=>{ net.id=id;
+    setNet("You're the HOST. Share this code: <code>"+id+"</code><br>Set your look, then hit PLAY — friends can join before or during."); });
+  net.peer.on("connection", conn=>{
+    conn.on("open", ()=>{ /* wait for hello */ });
+    conn.on("data", d=>{
+      if (d && d.t==="hello"){ const slot=assignRemoteSlot(conn, d); conn._slot=slot;
+        conn.send({t:"welcome", slot, ok: slot>=0, map:currentMapId});
+        if (slot<0){ try{conn.close();}catch(e){} } else netCount(); }
+      else if (d && d.t==="input" && conn._slot>=0){ net.inputs[conn._slot]=d.in; }
+      else if (d && d.t==="wins" && conn._slot>=0 && players[conn._slot]){ players[conn._slot].wins=d.n|0; }  // client won -> everyone sees the star
+    });
+    conn.on("close", ()=>{ freeRemoteSlot(conn); });
+    conn.on("error", ()=>{ freeRemoteSlot(conn); });
+  });
+  net.peer.on("error", e=>{ setNet("connection error ("+(e.type||e)+") — try again","warn"); });
+}
+function assignRemoteSlot(conn, hello){
+  conn._hello=hello;
+  for (let i=1;i<players.length;i++){ const p=players[i];
+    if (!p.remote && p.role!=="interference"){ applyRemote(p, conn, i);
+      net.conns.push(conn); return i; } }
+  return -1;   // game full
+}
+function applyRemote(p, conn, i){ const h=conn._hello||{}; p.remote=true; p.human=false; p.conn=conn; p.slot=i;
+  p.name=(h.name||"Player").slice(0,14); p.color=h.color||p.color; p.cls=h.cls||p.cls; p.accessory=h.accessory||"none"; p.wins=h.wins||0; conn._slot=i; }
+// after a reset()/restart, re-bind connected clients to their player slots (reset rebuilds the array as bots)
+function reassignRemotes(){ if (net.mode!=="host") return;
+  net.conns.forEach((conn,idx)=>{ const i=(conn._slot>0 && conn._slot<players.length)?conn._slot:(idx+1);
+    if (players[i]) applyRemote(players[i], conn, i); });
+}
+function freeRemoteSlot(conn){ const p=players.find(p=>p.conn===conn); if(p){ p.remote=false; p.conn=null; p.name="Bot "+(players.indexOf(p)+1); }
+  net.conns=net.conns.filter(c=>c!==conn); delete net.inputs[conn._slot]; netCount(); }
+function netCount(){ if(net.mode==="host" && !started) setNet("You're the HOST. Code: <code>"+net.id+"</code> · "+net.conns.length+" joined<br>Hit PLAY to start (friends can also join mid-match)."); }
+
+function joinGame(){
+  if (typeof Peer==="undefined"){ setNet("multiplayer needs an internet connection (PeerJS didn't load)","warn"); return; }
+  const code=(prompt("Enter the host's room code:")||"").trim(); if(!code) return;
+  netTeardown(); net.mode="client";
+  setNet("connecting to "+code+"…");
+  net.peer=new Peer(undefined,{debug:1});
+  net.peer.on("open", ()=>{
+    const conn=net.peer.connect(code,{reliable:true}); net.conns=[conn];
+    conn.on("open", ()=>{ conn.send({t:"hello", name:(document.getElementById("pname").value||"Player"), color:custom.color, cls:custom.cls, accessory:custom.accessory, wins:loadWins()}); });
+    conn.on("data", d=>{
+      if (d && d.t==="welcome"){ if(!d.ok){ setNet("game is full — ask the host for a slot","warn"); netTeardown(); return; }
+        net.selfSlot=d.slot; net.waiting=true;
+        if (d.map && d.map!==currentMapId) applyMap(d.map);   // match the host's chosen map before we render
+        menuEl.classList.add("hide"); started=true; last=performance.now(); initAudio(); startMusic("game"); }
+      else if (d && d.t==="snap"){ if (d.mp && d.mp!==currentMapId) applyMap(d.mp); net.lastSnap=d; net.waiting=false; }
+    });
+    conn.on("close", ()=>{ setNet("disconnected from host","warn"); backToMenuFromNet(); });
+    conn.on("error", ()=>{ setNet("lost connection","warn"); });
+  });
+  net.peer.on("error", e=>{ setNet("couldn't connect ("+(e.type||e)+") — check the code","warn"); });
+}
+function backToMenuFromNet(){ started=false; net.mode=null; net.lastSnap=null; menuEl.classList.remove("hide"); openMenu(); }
+
+// ---- host: pack the whole dynamic world into a compact snapshot ----
+function netSnapshot(){
+  return { t:"snap", mp:currentMapId, ph:match.phase, el:match.elapsed, tt:match.t, ml:match.marksLeft, bt:match.beaconTimer, it:itIndex,
+    ann: match.announce?{text:match.announce.text,sub:match.announce.sub,t:match.announce.t,max:match.announce.max,col:match.announce.col}:null,
+    feed: match.feed.map(f=>({text:f.text,t:f.t})),
+    banks: match.banks.map(b=>({x:b.x,y:b.y})),
+    res: match.results ? match.results.map(p=>({nm:p.name,pl:p.place,sc:Math.round(p.score),ro:p.role,idx:players.indexOf(p)})) : null,
+    doors: match.doors.map(d=>d.open?1:0),
+    haz: match.hazards.map(h=>({x:h.x,y:h.y,w:h.w,h:h.h,life:h.life,maxLife:h.maxLife,block:!!h.block,cage:!!h.cage,col:h.col||null})),
+    cores: match.cores.map(c=>({x:c.x,y:c.y,value:c.value,live:c.live,ho:c.holder?players.indexOf(c.holder):-1})),
+    ps: players.map(p=>({ x:+p.x.toFixed(1),y:+p.y.toFixed(1),h:+p.heading.toFixed(2),a:+p.aimAng.toFixed(2),
+      it:p.isIt?1:0,ro:p.role,cl:p.cls,co:p.color,nm:p.name,ac:p.accessory,sc:Math.round(p.score),rk:p.rank,
+      st:+p.stun.toFixed(2),im:+p.immunity.toFixed(2),sh:+p.shoveT.toFixed(2),sa:+p.shoveAng.toFixed(2),bl:+p.blinkT.toFixed(2),
+      dc:p.dashCharges,cd:+p.abilCdT.toFixed(2),bc:p.blockCharges,br:+p.blockRegenT.toFixed(1),ca:p.carrying?1:0,cv:p.carrying?+p.carrying.value.toFixed(1):0,am:p.aiming?1:0,w:p.wins||0 })) };
+}
+// ---- client: apply a snapshot to local state, then move MY slot to index 0 (camera/fog follow me) ----
+function netApply(s){
+  match.phase=s.ph; match.elapsed=s.el; match.t=s.tt; match.marksLeft=s.ml; match.beaconTimer=s.bt;
+  match.announce = s.ann?{text:s.ann.text,sub:s.ann.sub,t:s.ann.t,max:s.ann.max,col:s.ann.col}:null;
+  match.feed = s.feed.map(f=>({text:f.text,t:f.t}));
+  match.banks = s.banks.map(b=>({x:b.x,y:b.y}));
+  match.results = s.res ? s.res.map(r=>({name:r.nm,place:r.pl,score:r.sc,role:r.ro,human:r.idx===net.selfSlot})) : null;
+  if (match.doors) match.doors.forEach((d,i)=>{ d.open=!!s.doors[i]; });
+  match.hazards = s.haz.map(h=>({x:h.x,y:h.y,w:h.w,h:h.h,life:h.life,maxLife:h.maxLife,block:h.block,cage:h.cage,col:h.col,noLos:h.cage}));
+  while (players.length<s.ps.length) players.push(makePlayer(0,0,false,"",""));
+  players.length=s.ps.length;
+  s.ps.forEach((sp,i)=>{ let p=players[i]; if(!p){p=makePlayer(0,0,false,"","");players[i]=p;}
+    p.x=sp.x;p.y=sp.y;p.heading=sp.h;p.aimAng=sp.a;p.isIt=!!sp.it;p.role=sp.ro;p.cls=sp.cl;p.color=sp.co;p.name=sp.nm;p.accessory=sp.ac;
+    p.score=sp.sc;p.rank=sp.rk;p.stun=sp.st;p.immunity=sp.im;p.shoveT=sp.sh;p.shoveAng=sp.sa;p.blinkT=sp.bl;
+    p.dashCharges=sp.dc;p.abilCdT=sp.cd;p.blockCharges=sp.bc;p.blockRegenT=sp.br;p.aiming=!!sp.am;p.human=false;p.wins=sp.w||0;
+    p.carrying = sp.ca?{value:sp.cv}:null; });
+  match.cores = s.cores.map(c=>({x:c.x,y:c.y,value:c.value,live:c.live,holder:c.ho>=0?players[c.ho]:null,cd:0,grabCd:0,lastHolder:null}));
+  itIndex = s.it;
+  const my=net.selfSlot;
+  if (my>0 && my<players.length){ const t=players[0]; players[0]=players[my]; players[my]=t;
+    if(itIndex===0) itIndex=my; else if(itIndex===my) itIndex=0; }
+  if (players[0]){ players[0].human=true; players[0].wins=loadWins(); }   // index 0 is ME (drives "you" HUD/camera + my true win count)
+}
+function netClientInput(){ const mv=readMoveKeys(); const you=players[0]; let aim=you?you.aimAng:0;
+  if (you){ const m=mouseWorld(); aim=Math.atan2(m.y-you.y,m.x-you.x); }
+  return { dx:mv.dx,dy:mv.dy,moving:mv.moving, dash:tapDash,door:tapDoor,abil:tapAbil, aim, aiming: abilHeld?1:0 }; }
+
+function frame(now){
+  let dt=(now-last)/1000; last=now; dt=Math.max(0,Math.min(dt,0.033)); // clamp: never negative, never a huge catch-up step
+  if (!started){ requestAnimationFrame(frame); return; }   // paused on the menu
+  // --- CLIENT: no local sim. Send input, apply the host's latest snapshot, render. ---
+  if (net.mode==="client"){
+    const c=net.conns[0]; if (c && c.open){ try{ c.send({t:"input", slot:net.selfSlot, in:netClientInput()}); }catch(e){} }
+    if (net.lastSnap) netApply(net.lastSnap);
+    const you=players[0];
+    if (you && you.cls==="striker" && abilHeld && !you.isIt){ you.aiming=true; const m=mouseWorld(); you.aimAng=Math.atan2(m.y-you.y,m.x-you.x); }  // local aim so the reticle is smooth
+    const cd = match.doors ? match.doors.filter(d=>!d.open) : [];
+    obstacles = walls.concat(cd).concat(match.hazards||[]);
+    losObstacles = walls.concat(cd).concat((match.hazards||[]).filter(h=>!h.noLos));
+    updateEffects(dt); updateTerror(dt); checkWinCredit();
+    if (net.waiting || !net.lastSnap) drawNetWaiting(); else render();
+    tapDash=false; tapDoor=false; tapAbil=false;
+    requestAnimationFrame(frame); return;
+  }
+  const closedDoors = match.doors ? match.doors.filter(d=>!d.open) : [];
+  obstacles = walls.concat(closedDoors).concat(match.hazards);
+  losObstacles = walls.concat(closedDoors).concat(match.hazards.filter(h=>!h.noLos));
+  updateMatch(dt);
+  const scoring=(match.phase==="live"||match.phase==="showdown");
+  if (scoring) updateCores(dt);
+  for (const p of players){
+    p.immunity=Math.max(0,p.immunity-dt);
+    p.stealCdT=Math.max(0,p.stealCdT-dt); p.grabGraceT=Math.max(0,p.grabGraceT-dt);
+    if (p.role==="interference"){ updateInterference(p,dt); continue; }
+    if (scoring && p.isIt){ p.hold+=dt; p.itMult=1+Math.min(p.hold*CFG.itEscalation,0.2);
+      p.score=Math.max(0, p.score-CFG.itScoreBleed*dt); }   // IT can't earn and slowly bleeds
+    else p.itMult=1;
+    tickAbility(p,dt);                         // cooldowns + strike/blink timers
+    // INTENT: local human (index 0) types; a REMOTE player's intent arrives over the net; bots use AI.
+    const ni = p.remote ? net.inputs[p.slot] : null;
+    const intent = p.remote ? (ni?{dx:ni.dx,dy:ni.dy,moving:ni.moving,dash:ni.dash,door:ni.door,abil:ni.abil}:{dx:0,dy:0,moving:false,dash:false,door:false,abil:false})
+                            : (p.human?humanIntent():aiIntent(p,dt));
+    if (p.human && !p.remote && p.cls==="striker" && !p.isIt && p.role!=="interference"){
+      // Striker (local): HOLD the ability to aim (track cursor), RELEASE to fire. Aim is INDEPENDENT of facing.
+      if (tapAbil && p.abilCdT<=0 && p.stun<=0 && !p.breakDoor) p.aiming=true;   // press starts the aim
+      if (p.aiming){ const m=mouseWorld(); p.aimAng=Math.atan2(m.y-p.y,m.x-p.x); }
+      if (p.aiming && !abilHeld){ p.aiming=false; useAbility(p); }               // release fires
+    } else if (p.remote && p.cls==="striker" && !p.isIt && p.role!=="interference"){
+      // Striker (remote): same hold-to-aim, driven by the client's sent input (aim angle + aiming flag).
+      if (ni && ni.abil && p.abilCdT<=0 && p.stun<=0 && !p.breakDoor) p.aiming=true;
+      if (p.aiming && ni){ p.aimAng=ni.aim; }
+      if (p.aiming && ni && !ni.aiming){ p.aiming=false; useAbility(p); }
+    } else if (intent.abil) useAbility(p);     // other classes / bots: fire on press
+    if (ni){ ni.dash=false; ni.door=false; ni.abil=false; }   // consume the remote taps so one press = one action
+
+    p.doorCdT=Math.max(0,p.doorCdT-dt);
+    p.doorSlowT=Math.max(0,p.doorSlowT-dt);
+    updateDoorBreak(p,intent,dt);              // IT breaks a closed door only while actively ramming it (never freezes)
+    stepMovement(p,intent,dt);
+    if (intent.door) tryDoor(p);
+    // juice: motion trail (dashes leave nice streaks)
+    p.speed=Math.hypot(p.vx,p.vy);
+    p.trailT-=dt;
+    if (p.speed>150 && p.trailT<=0){ p.trail.push({x:p.x,y:p.y,life:0.34,max:0.34}); p.trailT=0.028; }
+    for (let i=p.trail.length-1;i>=0;i--){ p.trail[i].life-=dt; if (p.trail[i].life<=0) p.trail.splice(i,1); }
+  }
+  if (scoring) checkSteals();                 // run-into-a-carrier steal (after movement, so positions are current)
+  updateEffects(dt);
+  updateTerror(dt);
+  if (match.phase!=="over") checkTag();
+  checkWinCredit();
+  render();
+  // HOST: broadcast a world snapshot to every client at snapHz
+  if (net.mode==="host" && net.conns.length){ net.snapT+=dt;
+    if (net.snapT>=1/net.snapHz){ net.snapT=0; const snap=netSnapshot();
+      for (const c of net.conns){ if (c.open){ try{ c.send(snap); }catch(e){} } } } }
+  tapDash=false; tapDoor=false; tapAbil=false;   // consume human taps for this frame
+  requestAnimationFrame(frame);
+}
+// client "waiting for host" screen (shown until the first snapshot lands)
+function drawNetWaiting(){
+  ctx.clearRect(0,0,VIEW_W,VIEW_H); ctx.fillStyle="#05070b"; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  ctx.fillStyle="#7fd1ff"; ctx.textAlign="center"; ctx.font="bold 20px monospace";
+  ctx.fillText("connected — waiting for the host to start…", VIEW_W/2, VIEW_H/2);
+  ctx.fillStyle="#8aa0b4"; ctx.font="13px monospace";
+  ctx.fillText("(you'll drop straight into the match)", VIEW_W/2, VIEW_H/2+26);
+}
+
+// ============================================================
+// RENDER (camera + fog of war)
+// ============================================================
+function updateCamera(){
+  const you=players[0];
+  // if the window is bigger than the world on an axis, center the world instead of clamping to a negative range
+  cam.x = WORLD_W<=VIEW_W ? (WORLD_W-VIEW_W)/2 : clamp(you.x-VIEW_W/2, 0, WORLD_W-VIEW_W);
+  cam.y = WORLD_H<=VIEW_H ? (WORLD_H-VIEW_H)/2 : clamp(you.y-VIEW_H/2, 0, WORLD_H-VIEW_H);
+}
+function drawGrid(lit){
+  ctx.strokeStyle=lit?"rgba(96,168,214,0.16)":"rgba(60,90,120,0.06)"; ctx.lineWidth=1;
+  const x0=Math.floor((cam.x-40)/40)*40, y0=Math.floor((cam.y-40)/40)*40;
+  for (let x=x0; x<=cam.x+VIEW_W+40; x+=40){ ctx.beginPath(); ctx.moveTo(x,cam.y-40); ctx.lineTo(x,cam.y+VIEW_H+40); ctx.stroke(); }
+  for (let y=y0; y<=cam.y+VIEW_H+40; y+=40){ ctx.beginPath(); ctx.moveTo(cam.x-40,y); ctx.lineTo(cam.x+VIEW_W+40,y); ctx.stroke(); }
+  if (lit){                                            // glowing tech dots at intersections
+    ctx.fillStyle="rgba(120,200,240,0.22)";
+    for (let x=x0; x<=cam.x+VIEW_W+40; x+=40) for (let y=y0; y<=cam.y+VIEW_H+40; y+=40){
+      ctx.fillRect(x-1,y-1,2,2); }
+  }
+}
+function clipVis(pts){ ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+  for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y); ctx.closePath(); ctx.clip(); }
+
+// Ambient dust motes drifting in the light — cheap atmosphere.
+const motes=[]; for (let i=0;i<90;i++) motes.push({ x:Math.random()*WORLD_W, y:Math.random()*WORLD_H, r:0.6+Math.random()*1.5, ph:Math.random()*99, sp:5+Math.random()*11 });
+function drawMotes(now, L, reach){
+  const t=now*0.001;
+  for (const m of motes){
+    const x=m.x+Math.sin(t*0.3+m.ph)*9;
+    const y=(((m.y - t*m.sp) % WORLD_H)+WORLD_H)%WORLD_H;
+    const d=Math.hypot(x-L.x,y-L.y); if (d>reach) continue;
+    const a=(1-d/reach)*0.3*(0.45+0.55*Math.sin(t*2+m.ph));
+    ctx.fillStyle="rgba(190,220,255,"+a+")";
+    ctx.beginPath(); ctx.arc(x,y,m.r,0,Math.PI*2); ctx.fill();
+  }
+}
+// Dynamic shadows: every wall/closed-door casts a shadow projected AWAY from your light (=you).
+// Shadows sweep as you move — the single biggest "real lit scene" upgrade for a top-down game.
+function drawShadows(L, reach){
+  const K=2.2;                                        // how far shadows project past the caster
+  const occ=[]; for (const w of walls) occ.push(w);
+  if (match.doors) for (const d of match.doors) if (!d.open) occ.push(d);
+  ctx.save();
+  ctx.fillStyle="rgba(0,0,0,0.42)";
+  ctx.shadowColor="rgba(0,0,0,0.42)"; ctx.shadowBlur=10;   // soft penumbra
+  for (const w of occ){
+    const cx=w.x+w.w/2, cy=w.y+w.h/2;
+    if (Math.hypot(cx-L.x,cy-L.y) > reach*1.35) continue;   // only near walls (perf + realism)
+    const c=[{x:w.x,y:w.y},{x:w.x+w.w,y:w.y},{x:w.x+w.w,y:w.y+w.h},{x:w.x,y:w.y+w.h}];
+    for (let i=0;i<4;i++){
+      const p1=c[i], p2=c[(i+1)%4];
+      const nx=p2.y-p1.y, ny=-(p2.x-p1.x);            // outward normal of this (clockwise) edge
+      const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+      if (nx*(mx-L.x)+ny*(my-L.y) > 0){               // edge faces away from the light -> it casts
+        const q1={x:p1.x+(p1.x-L.x)*K, y:p1.y+(p1.y-L.y)*K};
+        const q2={x:p2.x+(p2.x-L.x)*K, y:p2.y+(p2.y-L.y)*K};
+        ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+        ctx.lineTo(q2.x,q2.y); ctx.lineTo(q1.x,q1.y); ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// ---- 2.5D character models ----------------------------------------------------
+// Each class is an EXTRUDED solid (not a flat disc): a distinct top-down footprint given real
+// height, matching the extruded neon walls. Footprint is traced forward=+x, centered at origin,
+// then rotated to heading + stacked in slices for volume.
+//   Striker = forward dart/arrowhead · Bulwark = broad hex block · Warden = diamond + hover ring.
+function unitPath(g, r, clsId){
+  if (clsId==="striker"){                 // dart: sharp nose forward, swept tail
+    g.moveTo(r*1.6,0); g.lineTo(-r*0.45,r*1.02); g.lineTo(-r*0.95,0); g.lineTo(-r*0.45,-r*1.02); g.closePath();
+  } else if (clsId==="bulwark"){          // hexagon: broad, heavy
+    for (let i=0;i<6;i++){ const a=i*Math.PI/3, X=Math.cos(a)*r*1.28, Y=Math.sin(a)*r*1.28; i?g.lineTo(X,Y):g.moveTo(X,Y); }
+    g.closePath();
+  } else {                                // warden diamond
+    g.moveTo(r*1.32,0); g.lineTo(0,r*1.12); g.lineTo(-r*1.32,0); g.lineTo(0,-r*1.12); g.closePath();
+  }
+}
+// per-class accents on the lit top face (drawn in the rotated forward=+x frame)
+function drawClassAccent(g, r, clsId, acc){
+  if (clsId==="striker"){                 // bright leading edge + center ridge
+    g.beginPath(); g.moveTo(r*1.6,0); g.lineTo(r*0.35,r*0.42); g.lineTo(r*0.35,-r*0.42); g.closePath();
+    g.fillStyle=tint(acc,0.45); g.fill();
+    g.strokeStyle=rgba(acc,0.9); g.lineWidth=1.5; g.beginPath(); g.moveTo(-r*0.9,0); g.lineTo(r*1.5,0); g.stroke();
+  } else if (clsId==="bulwark"){          // rivets at the plate corners
+    g.fillStyle=tint(acc,0.4);
+    for (let i=0;i<6;i++){ const a=i*Math.PI/3; g.beginPath(); g.arc(Math.cos(a)*r*0.95, Math.sin(a)*r*0.95, r*0.13, 0, Math.PI*2); g.fill(); }
+  } else {                                // warden: a hovering segmented ring + orbiting node above the body
+    const R=r*1.45, rot=performance.now()/650;
+    g.strokeStyle=acc; g.lineWidth=3;
+    for (let i=0;i<5;i++){ const a0=rot+i*2*Math.PI/5; g.beginPath(); g.arc(0,0,R,a0,a0+Math.PI/4); g.stroke(); }
+    const na=rot*2; g.fillStyle=tint(acc,0.35);
+    g.beginPath(); g.arc(Math.cos(na)*R, Math.sin(na)*R, r*0.22, 0, Math.PI*2); g.fill();
+  }
+}
+// draw one 2.5D unit at (x,y) on the ground, body raised by bodyH. o = {cls,isIt,color,img}
+function drawUnit(g, x, y, r, heading, o){
+  const acc=clsById(o.cls).accent, H=CFG.bodyH, base=o.isIt?"#ff5a5a":(o.color||"#8fb7d8");
+  g.save(); g.lineJoin="round"; g.lineCap="round";
+  // extruded sides — slices from ground up (darker at the base)
+  for (let dz=H; dz>=1; dz--){
+    g.save(); g.translate(x, y-dz); g.rotate(heading);
+    g.beginPath(); unitPath(g,r,o.cls);
+    g.fillStyle=shade(base, 0.30+(1-dz/H)*0.16); g.fill();
+    g.restore();
+  }
+  // lit top face
+  g.save(); g.translate(x, y-H); g.rotate(heading);
+  g.beginPath(); unitPath(g,r,o.cls);
+  const grd=g.createRadialGradient(-r*0.3,-r*0.35,2, 0,0, r*1.5);
+  grd.addColorStop(0,tint(base,0.55)); grd.addColorStop(0.5,base); grd.addColorStop(1,shade(base,0.7));
+  g.fillStyle=grd; g.fill();
+  if (o.isIt){ g.save(); g.shadowColor="rgba(255,40,40,0.9)"; g.shadowBlur=14;
+    g.strokeStyle="#ff2a2a"; g.lineWidth=3.5; g.stroke(); g.restore(); }
+  else { g.strokeStyle=acc; g.lineWidth=2.5; g.stroke(); }
+  g.restore();
+  // top-face content: an upright photo (circular inset) OR the class accent + eyes
+  const hasImg=o.img && o.img.complete && o.img.naturalWidth;
+  if (hasImg){
+    g.save(); g.beginPath(); g.arc(x,y-H,r*0.82,0,Math.PI*2); g.clip();
+    const s=Math.max((2*r*0.82)/o.img.naturalWidth,(2*r*0.82)/o.img.naturalHeight);
+    const w=o.img.naturalWidth*s, h=o.img.naturalHeight*s;
+    g.drawImage(o.img,x-w/2,(y-H)-h/2,w,h); g.restore();
+    g.save(); g.translate(x,y-H); g.rotate(heading); drawClassAccent(g,r,o.cls,acc); g.restore();  // ring/rivets still read over a photo
+  } else {
+    g.save(); g.translate(x,y-H); g.rotate(heading);
+    drawClassAccent(g,r,o.cls,acc);
+    drawFace(g,0,0,r,0);                    // eyes point forward (+x in this rotated frame)
+    g.restore();
+  }
+  g.restore();
+}
+// floor ring under a unit that shows its class-ability charge — the at-a-glance cooldown tell.
+// A perspective (flattened) ellipse on the ground: fills as it recharges, pulses bright when READY.
+function drawCooldownRing(p){
+  if (p.role==="interference" || p.isIt) return;   // ability is disabled while IT
+  const c=clsById(p.cls), r=CFG.radius, yy=p.y+r*0.5, rx=r+9, ry=(r+9)*0.5;
+  ctx.strokeStyle="rgba(255,255,255,0.10)"; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.ellipse(p.x,yy,rx,ry,0,0,Math.PI*2); ctx.stroke();
+  const frac=p.abilCdT<=0?1:1-p.abilCdT/c.cd;
+  ctx.strokeStyle=p.abilCdT<=0?c.accent:rgba(c.accent,0.55); ctx.lineWidth=3.5;
+  ctx.beginPath(); ctx.ellipse(p.x,yy,rx,ry,0,-Math.PI/2,-Math.PI/2+frac*Math.PI*2); ctx.stroke();
+  if (p.abilCdT<=0){ const pl=0.5+0.5*Math.sin(performance.now()/220);   // ready: glowing pulse
+    ctx.strokeStyle=rgba(c.accent,0.18+pl*0.32); ctx.lineWidth=6;
+    ctx.beginPath(); ctx.ellipse(p.x,yy,rx,ry,0,0,Math.PI*2); ctx.stroke(); }
+}
+// Among-Us-style eyes that point where you're heading. Reusable (game + menu preview).
+function drawFace(g, x, y, r, heading){
+  const fx=Math.cos(heading), fy=Math.sin(heading), px=-fy, py=fx;
+  const cx=x+fx*r*0.26, cy=y+fy*r*0.26, off=r*0.42, er=r*0.30;
+  for (const s of [-1,1]){
+    const ex=cx+px*off*s, ey=cy+py*off*s;
+    g.fillStyle="#f7fbff"; g.beginPath(); g.arc(ex,ey,er,0,Math.PI*2); g.fill();
+    g.fillStyle="#10151c"; g.beginPath(); g.arc(ex+fx*er*0.4,ey+fy*er*0.4,er*0.52,0,Math.PI*2); g.fill();
+  }
+}
+// Cosmetic accessories, drawn in screen-up orientation so they read from top-down.
+function drawAccessory(g, x, y, r, heading, acc){
+  if (!acc || acc==="none") return;
+  g.lineJoin="round"; g.lineCap="round";
+  const top=y-r;
+  if (acc==="cap"){
+    g.fillStyle="#1b2632"; g.beginPath(); g.arc(x,y-r*0.35,r*0.92,Math.PI,0); g.closePath(); g.fill();
+    g.fillStyle="#2a3a4c"; g.fillRect(x-r*0.2,top-r*0.28,r*0.4,r*0.35);           // button top
+    g.beginPath(); g.arc(x+r*0.2,top-r*0.1,r*0.12,0,Math.PI*2); g.fill();
+  } else if (acc==="visor"){
+    g.fillStyle="rgba(20,28,38,0.85)"; g.beginPath();
+    g.ellipse(x,y-r*0.05,r*0.9,r*0.42,0,Math.PI,0); g.closePath(); g.fill();
+    g.strokeStyle="rgba(140,200,255,0.5)"; g.lineWidth=1.5; g.stroke();
+  } else if (acc==="antenna"){
+    g.strokeStyle="#c7d2dd"; g.lineWidth=2; g.beginPath(); g.moveTo(x,top); g.lineTo(x,top-r*0.85); g.stroke();
+    g.fillStyle="#ffd479"; g.beginPath(); g.arc(x,top-r*0.95,r*0.2,0,Math.PI*2); g.fill();
+  } else if (acc==="crown"){
+    g.fillStyle="#ffd479"; const yb=top-r*0.05, yt=top-r*0.75, w=r*0.85;
+    g.beginPath(); g.moveTo(x-w,yb); g.lineTo(x-w,yt); g.lineTo(x-w*0.5,yb-r*0.15);
+    g.lineTo(x,yt); g.lineTo(x+w*0.5,yb-r*0.15); g.lineTo(x+w,yt); g.lineTo(x+w,yb); g.closePath(); g.fill();
+  } else if (acc==="ears"){
+    g.fillStyle="#2a3a4c";
+    for (const s of [-1,1]){ g.beginPath(); g.moveTo(x+s*r*0.5,top+r*0.2);
+      g.lineTo(x+s*r*0.85,top-r*0.5); g.lineTo(x+s*r*0.15,top-r*0.05); g.closePath(); g.fill(); }
+  }
+}
+
+function drawBody(p){
+  const acc=clsById(p.cls).accent, r=CFG.radius, H=CFG.bodyH, top=p.y-H;
+  // motion trail (tinted by class so you read who's who by their streak)
+  for (const t of p.trail){ const a=Math.max(0,t.life/t.max)*0.4;
+    ctx.fillStyle=p.isIt?("rgba(255,90,90,"+a+")"):rgba(acc,a);
+    ctx.beginPath(); ctx.arc(t.x,t.y,r*0.8,0,Math.PI*2); ctx.fill(); }
+  // ground shadow (2.5D — sits under the raised body)
+  ctx.fillStyle="rgba(0,0,0,0.34)";
+  ctx.beginPath(); ctx.ellipse(p.x,p.y+r*0.5,r*1.05,r*0.5,0,0,Math.PI*2); ctx.fill();
+
+  if (p.role==="interference"){
+    ctx.fillStyle=p.human?"#a98bff":"#8a7bb0";
+    ctx.beginPath(); ctx.moveTo(p.x,p.y-10); ctx.lineTo(p.x+9,p.y); ctx.lineTo(p.x,p.y+10); ctx.lineTo(p.x-9,p.y);
+    ctx.closePath(); ctx.fill(); ctx.strokeStyle="#c9b8ff"; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle="#b9a9e0"; ctx.font="10px monospace"; ctx.textAlign="center"; ctx.fillText(p.name,p.x,p.y-15);
+    return;
+  }
+  // --- ground-level rings (under the body): tag reach, ability cooldown, status ---
+  if (p.isIt){ ctx.fillStyle="rgba(255,80,80,0.10)";
+    ctx.beginPath(); ctx.ellipse(p.x,p.y+r*0.5,r+CFG.tagPad+r*0.6,(r+CFG.tagPad+r*0.6)*0.5,0,0,Math.PI*2); ctx.fill(); }
+  // Striker shove: a quick cone wedge flashes out in the aimed direction (no body movement)
+  if ((p.shoveT||0)>0){ const acc2=clsById(p.cls).accent, f=p.shoveT/0.34;
+    ctx.fillStyle=rgba(acc2,0.28*f);
+    ctx.beginPath(); ctx.moveTo(p.x,p.y);
+    ctx.arc(p.x,p.y,CFG.strikeRange,p.shoveAng-CFG.strikeCone,p.shoveAng+CFG.strikeCone); ctx.closePath(); ctx.fill();
+  }
+  drawCooldownRing(p);                                 // class-ability charge indicator
+  if (p.immunity>0){ ctx.strokeStyle="rgba(150,220,255,0.5)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(p.x,p.y+r*0.5,r+6,(r+6)*0.5,0,0,Math.PI*2); ctx.stroke(); }
+  if (p.buffed){ ctx.strokeStyle="rgba(120,255,180,0.75)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(p.x,p.y+r*0.5,r+12,(r+12)*0.5,0,0,Math.PI*2); ctx.stroke(); }
+  if (p.carrying){ const pl=0.5+0.5*Math.sin(performance.now()/90);   // carrying a core: hot amber halo (lit up = visible to all)
+    const frac=clamp(p.carrying.value/CFG.carryGrowCap,0,1), full=frac>=0.999;
+    const glow=full?"rgba(255,245,180,":"rgba(255,214,120,";
+    ctx.save(); ctx.shadowColor=full?"rgba(255,240,150,1)":"rgba(255,200,90,0.9)"; ctx.shadowBlur=(full?26:18)+pl*14;
+    ctx.strokeStyle=glow+(0.55+pl*0.4)+")"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(p.x,p.y+r*0.5,r+9+pl*4,(r+9+pl*4)*0.5,0,0,Math.PI*2); ctx.stroke(); ctx.restore();
+    // charge arc above the body: fills as the core's value grows; goes white-hot + "FULL" at the cap
+    const cy=p.y-CFG.bodyH-r-14, cr=r*0.9;
+    ctx.strokeStyle="rgba(255,255,255,0.16)"; ctx.lineWidth=3.5;
+    ctx.beginPath(); ctx.arc(p.x,cy,cr,-Math.PI/2,-Math.PI/2+Math.PI*2); ctx.stroke();
+    ctx.strokeStyle=full?("rgba(255,245,180,"+(0.7+pl*0.3)+")"):"rgba(255,196,86,0.95)"; ctx.lineWidth=3.5;
+    ctx.beginPath(); ctx.arc(p.x,cy,cr,-Math.PI/2,-Math.PI/2+frac*Math.PI*2); ctx.stroke();
+    if (full){ ctx.fillStyle="rgba(255,245,180,"+(0.7+pl*0.3)+")"; ctx.font="bold 9px monospace"; ctx.textAlign="center"; ctx.fillText("FULL",p.x,cy+3); }
+  }
+
+  // --- the 2.5D unit (extruded solid, class silhouette + color/photo) ---
+  drawUnit(ctx,p.x,p.y,r,p.heading,{cls:p.cls,isIt:p.isIt,color:p.color,img:p.img});
+  drawAccessory(ctx,p.x,top,r,p.heading,p.accessory);           // hats sit on the top face
+  if (p.human){ ctx.strokeStyle="rgba(234,255,255,0.85)"; ctx.lineWidth=1.5;   // subtle "you" tell on the top face
+    ctx.save(); ctx.translate(p.x,top); ctx.rotate(p.heading); ctx.beginPath(); unitPath(ctx,r+2,p.cls); ctx.stroke(); ctx.restore(); }
+
+  // --- labels above the raised body ---
+  if (p.rank){ ctx.fillStyle=rankColor(p.rank); ctx.font="bold 10px monospace"; ctx.textAlign="center";
+    ctx.fillText(ordinal(p.rank), p.x, top-r-13); }
+  if (p.stun>0){ ctx.fillStyle="#ffe27a"; ctx.font="14px monospace"; ctx.textAlign="center"; ctx.fillText("★",p.x,top-r-24); }
+  // dash-charge pips (human only) — on the ground in front
+  if (p.human){ const n=CFG.dashCharges, gap=9, x0=p.x-((n-1)*gap)/2, yy=p.y+r+13;
+    for (let i=0;i<n;i++){ ctx.fillStyle=i<p.dashCharges?"#7fe0ff":"#33465a";
+      ctx.beginPath(); ctx.arc(x0+i*gap,yy,2.6,0,Math.PI*2); ctx.fill(); } }
+}
+function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+function rankColor(n){ return n===1?"#ffd166":n===2?"#cfd8e3":n===3?"#d9955a":"#8aa0b4"; }
+
+// ============================================================
+// 3D RENDERER (Three.js) — the world renders as a real 3D scene on #gl; fog-of-war + HUD stay as a
+// 2D overlay on #c. Auto-falls back to render2D() if WebGL/Three is unavailable or errors. Toggle: G.
+// World->scene mapping: world (x,y) -> three (x, height, y); z = worldY. Floor is the XZ plane at y=0.
+// (use3D / gl / G are declared up top so resizeCanvas can see them.)
+// ============================================================
+function makeGlowTexture(){                    // soft radial sprite = cheap "bloom" around emissive things
+  const s=128, cv=document.createElement("canvas"); cv.width=cv.height=s;
+  const g=cv.getContext("2d"), rg=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+  rg.addColorStop(0,"rgba(255,255,255,1)"); rg.addColorStop(0.25,"rgba(255,255,255,0.7)");
+  rg.addColorStop(1,"rgba(255,255,255,0)");
+  g.fillStyle=rg; g.fillRect(0,0,s,s);
+  return new THREE.CanvasTexture(cv);
+}
+function glowSprite(color, size){
+  const m=new THREE.SpriteMaterial({ map:gl.glowTex, color:color, blending:THREE.AdditiveBlending,
+    depthWrite:false, transparent:true, opacity:0.9 });
+  const sp=new THREE.Sprite(m); sp.scale.set(size,size,1); return sp;
+}
+function initGL(){
+  if (!use3D){ return; }
+  try {
+    const glc=document.getElementById("gl");
+    gl.renderer=new THREE.WebGLRenderer({ canvas:glc, antialias:true, powerPreference:"high-performance" });
+    gl.renderer.setPixelRatio(1);   // 1:1 pixels — biggest perf lever on hi-DPI / weak GPUs
+    gl.renderer.setSize(VIEW_W,VIEW_H,false);
+    gl.renderer.shadowMap.enabled=true; gl.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    gl.renderer.outputEncoding=THREE.sRGBEncoding;
+    gl.scene=new THREE.Scene();
+    gl.scene.background=new THREE.Color(0x05070b);
+    gl.scene.fog=new THREE.Fog(0x05070b, 520, 1500);
+    gl.camera=new THREE.PerspectiveCamera(52, VIEW_W/VIEW_H, 1, 6000);
+    gl.glowTex=makeGlowTexture();
+    gl.proj=new THREE.Vector3();
+    // --- lights: ambient shape + a directional "sun", and YOU are a point light. Colors/intensity are
+    //     re-tinted per map by applyTheme() (kept as refs), so each map has its own mood of light. ---
+    gl.hemi=new THREE.HemisphereLight(0x2a3d55, 0x05070b, 0.65); gl.scene.add(gl.hemi);
+    gl.amb=new THREE.AmbientLight(0x223247, 0.5); gl.scene.add(gl.amb);
+    gl.sun=new THREE.DirectionalLight(0x8fb4dd, 0.6);
+    gl.sun.position.set(220,1500,150); gl.sun.castShadow=true;   // steep/overhead -> short shadows contained near walls
+    gl.sun.shadow.mapSize.set(1024,1024); gl.sun.shadow.camera.near=100; gl.sun.shadow.camera.far=2400;
+    const sc=780; Object.assign(gl.sun.shadow.camera,{left:-sc,right:sc,top:sc,bottom:-sc}); gl.sun.shadow.camera.updateProjectionMatrix();
+    gl.scene.add(gl.sun); gl.scene.add(gl.sun.target);
+    gl.playerLight=new THREE.PointLight(0xcfe6ff, 1.6, 760, 2.0);   // no shadow (point-light shadows are the #1 cost)
+    gl.scene.add(gl.playerLight);
+    gl.itLight=new THREE.PointLight(0xff4030, 0.0, 520, 2.0); gl.scene.add(gl.itLight);
+    buildStaticGL();
+    gl.pool={ players:[], cores:[], banks:[], doors:[], cages:[], ghosts:[], blocks:[] };
+    gl.ok=true;
+    glc.style.display = use3D ? "block" : "none";
+  } catch(e){ gl.ok=false; use3D=false; console.warn("[3D] init failed, using 2D", e); }
+}
+function boxMesh(w,h,d, color, emissive, emInt){
+  const g=new THREE.BoxGeometry(w,h,d);
+  const m=new THREE.MeshStandardMaterial({ color:color, emissive:emissive||0x000000, emissiveIntensity:emInt||0,
+    roughness:0.55, metalness:0.35 });
+  return new THREE.Mesh(g,m);
+}
+// Re-tint the whole scene (background, fog, lights) to the active map's palette. Cheap; safe to call
+// on every map switch. Kept separate so buildStaticGL and any live theme change share one path.
+function applyTheme(t){
+  if (!gl.scene) return;
+  if (gl.scene.background) gl.scene.background.setHex(t.bg); else gl.scene.background=new THREE.Color(t.bg);
+  gl.scene.fog=new THREE.Fog(t.fog, t.fogNear, t.fogFar);
+  if (gl.hemi){ gl.hemi.color.setHex(t.hemiSky); gl.hemi.groundColor.setHex(t.hemiGround); gl.hemi.intensity=t.hemiInt; }
+  if (gl.amb){ gl.amb.color.setHex(t.ambCol); gl.amb.intensity=t.ambInt; }
+  if (gl.sun){ gl.sun.color.setHex(t.sunCol); gl.sun.intensity=t.sunInt; }
+}
+// A chunky near-square wall is a "pillar" — the theme's wall style reshapes those (round column /
+// crystal spike). Long thin walls stay low bars regardless, so lanes/rooms read the same everywhere.
+function isPillar(w){ const mn=Math.min(w.w,w.h), mx=Math.max(w.w,w.h); return mn>=28 && mx/mn<1.7; }
+function buildStaticGL(){
+  // rebuildable: tear down any prior static geometry (map switch) so nothing double-stacks
+  if (gl.staticGroup){
+    gl.scene.remove(gl.staticGroup);
+    gl.staticGroup.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); } });
+    gl.staticGroup=null;
+  }
+  const t=mapTheme(); applyTheme(t);
+  const root=new THREE.Group();
+  // floor: a big dark base plane extending past the arena (no void edge), receives shadows, plus a
+  // glowing grid over the play area. Both tinted per theme (cyan tech / orange grate / jade toxic).
+  const floorMat=new THREE.MeshStandardMaterial({ color:t.floor, roughness:0.9, metalness:0.2 });
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), floorMat);
+  floor.rotation.x=-Math.PI/2; floor.position.set(WORLD_W/2,0,WORLD_H/2); floor.receiveShadow=true;
+  root.add(floor);
+  const cell=t.gridCell, gx=Math.ceil(WORLD_W/cell), gz=Math.ceil(WORLD_H/cell);
+  const gridA=new THREE.GridHelper(gx*cell, gx, t.grid1, t.grid2);
+  gridA.position.set(gx*cell/2,0.6,WORLD_H/2); gridA.material.transparent=true; gridA.material.opacity=t.gridOp;
+  gridA.scale.z = (gz*cell)/(gx*cell); root.add(gridA);
+  // walls — one shared body material, per-style geometry, per-theme neon rim. Two rim colors alternate
+  // (e.g. green + violet crystals) for variety; long bars always take the primary rim.
+  const wh=G.wallH*(t.wallH||1);
+  const wallMat=new THREE.MeshStandardMaterial({ color:t.wall, emissive:t.wallEmis||0x000000, emissiveIntensity:t.wallEmisInt||0, roughness:0.5, metalness:0.5 });
+  let i=0;
+  for (const w of walls){
+    const pil=isPillar(w), r=Math.min(w.w,w.h)/2;
+    let geo, cy;
+    if (pil && t.style==="column"){ geo=new THREE.CylinderGeometry(r,r*1.06,wh*1.35,14); cy=wh*1.35/2; }        // round molten column
+    else if (pil && t.style==="crystal"){ geo=new THREE.ConeGeometry(r*1.12,wh*2.0,6); cy=wh*2.0/2; }            // jagged crystal spike
+    else { geo=new THREE.BoxGeometry(w.w,wh,w.h); cy=wh/2; }                                                     // default slab / long bar
+    const mesh=new THREE.Mesh(geo, wallMat);
+    mesh.position.set(w.x+w.w/2, cy, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+    const rimCol = (pil && t.rim2 && (i%2)) ? t.rim2 : t.rim;
+    const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),
+      new THREE.LineBasicMaterial({ color:rimCol, transparent:true, opacity:0.9 }));
+    edges.position.copy(mesh.position); root.add(edges);
+    i++;
+  }
+  gl.scene.add(root); gl.staticGroup=root;
+}
+function syncPool(pool, n, make){                 // grow/shrink a mesh pool to n and return active slice
+  while (pool.length<n){ const o=make(); gl.scene.add(o.root||o); pool.push(o); }
+  for (let i=0;i<pool.length;i++){ const o=pool[i]; (o.root||o).visible = i<n; }
+  return pool;
+}
+// --- character models -------------------------------------------------------
+// Each class is a distinct built-up mech silhouette so you can read it in fog / at
+// distance: Striker = lean forward-leaning blade-runner, Bulwark = wide heavy tank,
+// Warden = tall slender hovering sentinel. A rig collects two material buckets:
+//   body[]   -> recolored to the player's chosen color (or IT red) each frame
+//   accent[] -> recolored + emissive to the class accent (or IT trim) each frame
+// makePlayerMesh builds all three rigs into one root and shows the active class.
+function bodyMat(){ return new THREE.MeshStandardMaterial({ color:0x63e6ff, emissive:0x0b1119, emissiveIntensity:0.3, roughness:0.4, metalness:0.5 }); }
+function accMat(int){ const m=new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffffff, emissiveIntensity:int||1.5, roughness:0.25, metalness:0.4 }); m.userData.baseInt=int||1.5; return m; }
+function limbMat(){ return new THREE.MeshStandardMaterial({ color:0x1a2230, emissive:0x000000, roughness:0.6, metalness:0.6 }); }
+
+function buildStrikerRig(){
+  const g=new THREE.Group(), body=[], accent=[];
+  // aggressive forward-leaning wedge torso
+  const torsoM=bodyMat(); const torso=new THREE.Mesh(new THREE.CylinderGeometry(6,11,26,6), torsoM);
+  torso.position.set(0,20,1); torso.rotation.x=0.22; torso.castShadow=true; g.add(torso); body.push(torsoM);
+  // chest plate accent
+  const chM=accMat(1.2); const chest=new THREE.Mesh(new THREE.BoxGeometry(13,9,3), chM);
+  chest.position.set(0,24,9); chest.rotation.x=0.22; g.add(chest); accent.push(chM);
+  // angular head + slit visor pointing forward (+Z)
+  const headM=bodyMat(); const head=new THREE.Mesh(new THREE.ConeGeometry(6.5,12,4), headM);
+  head.position.set(0,38,3); head.rotation.set(1.35,Math.PI/4,0); head.castShadow=true; g.add(head); body.push(headM);
+  const visM=accMat(1.8); const visor=new THREE.Mesh(new THREE.BoxGeometry(9,2.4,2), visM);
+  visor.position.set(0,37,9); g.add(visor); accent.push(visM);
+  // swept shoulder blades (the offensive read)
+  for (const s of [-1,1]){ const blM=accMat(1.0);
+    const bl=new THREE.Mesh(new THREE.ConeGeometry(3.2,15,4), blM);
+    bl.position.set(s*11,29,-3); bl.rotation.set(-0.5,0,s*0.5); g.add(bl); accent.push(blM); }
+  // planted stance legs
+  for (const s of [-1,1]){ const lm=limbMat();
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.2,16,5), lm);
+    leg.position.set(s*4.5,8,-2+s*0); leg.rotation.x=-0.15; leg.castShadow=true; g.add(leg); }
+  return { group:g, body, accent };
+}
+
+function buildBulwarkRig(){
+  const g=new THREE.Group(), body=[], accent=[];
+  // wide, low, heavy — reads as a tank from any angle
+  const torsoM=bodyMat(); const torso=new THREE.Mesh(new THREE.BoxGeometry(24,20,16), torsoM);
+  torso.position.set(0,17,0); torso.castShadow=true; g.add(torso); body.push(torsoM);
+  // huge pauldrons
+  for (const s of [-1,1]){ const pm=bodyMat();
+    const p=new THREE.Mesh(new THREE.SphereGeometry(8,12,10), pm);
+    p.scale.set(1,0.8,1); p.position.set(s*14,24,0); p.castShadow=true; g.add(p); body.push(pm); }
+  // glowing shield band across the chest
+  const bandM=accMat(1.3); const band=new THREE.Mesh(new THREE.BoxGeometry(22,4,2), bandM);
+  band.position.set(0,20,8.6); g.add(band); accent.push(bandM);
+  // dome head, low between the shoulders, with a forward eye slit
+  const headM=bodyMat(); const head=new THREE.Mesh(new THREE.SphereGeometry(6.5,14,12), headM);
+  head.scale.set(1,0.85,1); head.position.set(0,31,1); head.castShadow=true; g.add(head); body.push(headM);
+  const eyeM=accMat(1.8); const eye=new THREE.Mesh(new THREE.BoxGeometry(9,2.2,2), eyeM);
+  eye.position.set(0,31,6.5); g.add(eye); accent.push(eyeM);
+  // top hazard-ring / crest so it's tall enough to spot
+  const crestM=accMat(1.0); const crest=new THREE.Mesh(new THREE.TorusGeometry(9,1.6,8,20), crestM);
+  crest.rotation.x=Math.PI/2; crest.position.y=8; g.add(crest); accent.push(crestM);
+  // stubby heavy legs
+  for (const s of [-1,1]){ const lm=limbMat();
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(7,10,8), lm);
+    leg.position.set(s*7,5,0); leg.castShadow=true; g.add(leg); }
+  return { group:g, body, accent };
+}
+
+function buildWardenRig(){
+  const g=new THREE.Group(), body=[], accent=[];
+  // tall, slender, hovering sentinel — small footprint, reads by height + halo
+  const robeM=bodyMat(); const robe=new THREE.Mesh(new THREE.ConeGeometry(11,30,10), robeM);
+  robe.position.set(0,17,0); robe.castShadow=true; g.add(robe); body.push(robeM);
+  // slim upper column
+  const coreM=bodyMat(); const col=new THREE.Mesh(new THREE.CylinderGeometry(4,5.5,14,8), coreM);
+  col.position.set(0,36,0); col.castShadow=true; g.add(col); body.push(coreM);
+  // floating orb head with a forward eye
+  const headM=bodyMat(); const head=new THREE.Mesh(new THREE.SphereGeometry(5.5,16,14), headM);
+  head.position.set(0,47,0); head.castShadow=true; g.add(head); body.push(headM);
+  const eyeM=accMat(2.0); const eye=new THREE.Mesh(new THREE.SphereGeometry(2.2,10,10), eyeM);
+  eye.position.set(0,47,5); g.add(eye); accent.push(eyeM);
+  // halo ring (the hybrid/blink read) tilted overhead
+  const haloM=accMat(1.5); const halo=new THREE.Mesh(new THREE.TorusGeometry(8,1.1,8,26), haloM);
+  halo.rotation.x=Math.PI/2.3; halo.position.y=52; g.add(halo); accent.push(haloM);
+  // two hovering shard "hands" flanking the column
+  for (const s of [-1,1]){ const sm=accMat(1.2);
+    const shard=new THREE.Mesh(new THREE.OctahedronGeometry(3,0), sm);
+    shard.position.set(s*11,33,0); g.add(shard); accent.push(sm); }
+  // glowing hem band at the robe base
+  const hemM=accMat(1.1); const hem=new THREE.Mesh(new THREE.TorusGeometry(10.5,1.3,8,24), hemM);
+  hem.rotation.x=Math.PI/2; hem.position.y=4; g.add(hem); accent.push(hemM);
+  return { group:g, body, accent };
+}
+
+function makePlayerMesh(){
+  const root=new THREE.Group();
+  const rigs={ striker:buildStrikerRig(), bulwark:buildBulwarkRig(), warden:buildWardenRig() };
+  for (const k in rigs){ rigs[k].group.visible=false; root.add(rigs[k].group); }
+  const glow=glowSprite(0xffffff, 58); glow.position.y=17; root.add(glow);
+  return { root, rigs, glow, cls:null };
+}
+function renderWorld3D(){
+  const you=players[0];
+  // camera: 3/4 chase, follows you, gentle screen-shake
+  const sh=effects.shake, jx=(Math.random()*2-1)*sh*1.6, jz=(Math.random()*2-1)*sh*1.6;
+  const camH=480, camBack=360;
+  gl.camera.position.set(you.x+jx, camH, you.y+camBack+jz);
+  gl.camera.lookAt(you.x, 30, you.y-40);
+  gl.playerLight.position.set(you.x, 130, you.y);
+  const it=itIndex>=0?players[itIndex]:null;
+  if (it){ gl.itLight.position.set(it.x,120,it.y); gl.itLight.intensity=2.2; } else gl.itLight.intensity=0;
+  // sun rides a fixed steep offset above you so the shadow frustum stays centered + the angle is constant
+  gl.sun.position.set(you.x+220, 1500, you.y+150); gl.sun.target.position.set(you.x,0,you.y);
+
+  // --- players ---
+  const shown=players.filter(p=>p.role!=="interference");
+  syncPool(gl.pool.players, shown.length, makePlayerMesh);
+  shown.forEach((p,i)=>{
+    const o=gl.pool.players[i]; o.root.position.set(p.x,0,p.y); o.root.rotation.y=-p.heading+Math.PI/2;
+    const acc=clsById(p.cls).accent, accN=parseInt(acc.slice(1),16), colN=parseInt((p.color||acc).slice(1),16);
+    // swap to this player's class rig (only when it changes — pool slots get reused across matches)
+    if (o.cls!==p.cls){ for (const k in o.rigs) o.rigs[k].group.visible=(k===p.cls); o.cls=p.cls; }
+    const rig=o.rigs[p.cls]||o.rigs.striker;
+    const bodyN=p.isIt?0xff4a3a:colN, emN=p.isIt?0x551008:accN, trimN=p.isIt?0xff5a48:accN;
+    rig.body.forEach(m=>{ m.color.setHex(bodyN); m.emissive.setHex(emN); m.emissiveIntensity=p.isIt?0.85:0.3; });
+    const flash=(p.shoveT>0)?(1+3.2*(p.shoveT/0.34)):1;              // whole chassis pulses bright as it shoves
+    rig.accent.forEach(m=>{ m.color.setHex(trimN); m.emissive.setHex(trimN); m.emissiveIntensity=(m.userData.baseInt||1.5)*flash; });
+    o.glow.material.color.setHex(p.carrying?0xffcf6a:(p.isIt?0xff5040:accN));
+    o.glow.material.opacity=p.carrying?0.42:(p.isIt?0.65:0.32);   // carry glow dimmed so the charge ring above the body reads
+    o.glow.scale.setScalar(p.carrying?52:(p.isIt?76:52));
+  });
+  // --- cores (loose + held) ---
+  const cores=(match.cores||[]).filter(c=>c.live);
+  syncPool(gl.pool.cores, cores.length, ()=>{
+    const root=new THREE.Group();
+    const orb=new THREE.Mesh(new THREE.IcosahedronGeometry(CFG.coreRadius,1),
+      new THREE.MeshStandardMaterial({ color:0xffd678, emissive:0xffb020, emissiveIntensity:1.6, roughness:0.2, metalness:0.6 }));
+    orb.castShadow=true; root.add(orb);
+    const glow=glowSprite(0xffcf6a,74); root.add(glow); return { root, orb, glow };
+  });
+  cores.forEach((c,i)=>{ const o=gl.pool.cores[i];
+    const bob=Math.sin(performance.now()/300+c.x*0.05)*4;
+    o.root.position.set(c.x, G.coreY+bob, c.y); o.orb.rotation.y+=0.03; o.orb.rotation.x+=0.02;
+    const full=c.value>=CFG.carryGrowCap-0.01;
+    o.orb.material.emissiveIntensity=full?2.4:1.6; o.glow.scale.setScalar(full?96:74);
+  });
+  // --- banks (glowing floor rings) ---
+  const banks=match.banks||[];
+  syncPool(gl.pool.banks, banks.length, ()=>{
+    const root=new THREE.Group();
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(CFG.bankRadius,3.5,10,48),
+      new THREE.MeshStandardMaterial({ color:0x8fe0ff, emissive:0x3aa6d8, emissiveIntensity:1.4, roughness:0.3 }));
+    ring.rotation.x=-Math.PI/2; ring.position.y=2; root.add(ring);
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(CFG.bankRadius,40),
+      new THREE.MeshBasicMaterial({ color:0x1a4a66, transparent:true, opacity:0.28 }));
+    disc.rotation.x=-Math.PI/2; disc.position.y=1; root.add(disc);
+    const beam=glowSprite(0x9fe0ff,90); beam.position.y=40; root.add(beam);
+    return { root, ring, beam };
+  });
+  banks.forEach((b,i)=>{ const o=gl.pool.banks[i]; o.root.position.set(b.x,0,b.y);
+    const hot=you.carrying && dist(you,b)<CFG.bankRadius+90;
+    o.ring.material.emissiveIntensity=hot?2.6:1.3; o.beam.material.opacity=hot?0.9:0.4; });
+  // --- doors: closed = amber slab; open = you must STILL see the doorway. So every door keeps a
+  // glowing floor threshold plate + two jamb posts, always visible (green when open / passable,
+  // amber when a closed slab is blocking it). No more invisible open doors. ---
+  const doors=match.doors||[];
+  syncPool(gl.pool.doors, doors.length, ()=>{
+    const root=new THREE.Group();
+    const slab=boxMesh(1,1,1, 0x8a5a24, 0xff9a30, 1.2); slab.castShadow=true; root.add(slab);
+    const thresh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshStandardMaterial({ color:0x14100a, emissive:0xff9a30, emissiveIntensity:0.6, transparent:true, opacity:0.5, roughness:0.5 }));
+    root.add(thresh);
+    const mkPost=()=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(2.6,3.2,1,10),
+      new THREE.MeshStandardMaterial({ color:0xffb050, emissive:0xff9a30, emissiveIntensity:1.4, roughness:0.3 })); root.add(m); return m; };
+    const postA=mkPost(), postB=mkPost();
+    const glow=glowSprite(0xffb060, 46); root.add(glow);
+    return { root, slab, thresh, postA, postB, glow };
+  });
+  doors.forEach((d,i)=>{ const o=gl.pool.doors[i]; const cx=d.x+d.w/2, cy=d.y+d.h/2, vert=d.h>d.w;
+    o.slab.visible=!d.open; o.slab.scale.set(d.w,G.wallH,d.h); o.slab.position.set(cx,G.wallH/2,cy);
+    // floor threshold plate — ALWAYS on, so the doorway reads even wide open
+    o.thresh.scale.set(vert?d.w*1.3:d.w, 1.6, vert?d.h:d.h*1.3); o.thresh.position.set(cx,1.3,cy);
+    o.thresh.material.emissive.setHex(d.open?0x39d98a:0xff9a30);
+    o.thresh.material.emissiveIntensity=d.open?1.3:0.6; o.thresh.material.opacity=d.open?0.72:0.42;
+    // jamb posts at the two ends: tall when open (marker beacons), hidden under the slab when closed
+    const postH=d.open?16:G.wallH*0.7;
+    const ends=vert?[[cx,cy-d.h/2],[cx,cy+d.h/2]]:[[cx-d.w/2,cy],[cx+d.w/2,cy]];
+    [o.postA,o.postB].forEach((pm,k)=>{ pm.scale.set(1,postH,1); pm.position.set(ends[k][0],postH/2,ends[k][1]);
+      pm.material.emissive.setHex(d.open?0x39d98a:0xff9a30); pm.material.color.setHex(d.open?0x7ff0b8:0xffb050); });
+    o.glow.position.set(cx,12,cy); o.glow.material.color.setHex(d.open?0x50e0a0:0xffb060);
+    o.glow.material.opacity=d.open?0.5:0.28; });
+  // --- bulwark cages (translucent energy walls) ---
+  const cages=(match.hazards||[]).filter(h=>h.cage);
+  syncPool(gl.pool.cages, cages.length, ()=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshStandardMaterial({ color:0x49a6ff, emissive:0x49a6ff, emissiveIntensity:1.4, transparent:true, opacity:0.4 }));
+    return m;
+  });
+  cages.forEach((h,i)=>{ const o=gl.pool.cages[i]; o.scale.set(h.w,G.wallH*0.8,h.h);
+    o.position.set(h.x+h.w/2,G.wallH*0.4,h.y+h.h/2);
+    o.material.opacity=0.25+0.2*Math.min(1,h.life/(h.maxLife||CFG.cageLife)); });
+  // --- ghost temp-blocks (culled-player walls): amber-purple translucent slabs that fade as they expire ---
+  const blocks=(match.hazards||[]).filter(h=>h.block);
+  syncPool(gl.pool.blocks, blocks.length, ()=>{
+    const root=new THREE.Group();
+    const box=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshStandardMaterial({ color:0x7a5ad0, emissive:0xa98bff, emissiveIntensity:1.1, transparent:true, opacity:0.55, roughness:0.4 }));
+    box.castShadow=true; root.add(box);
+    const edge=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),
+      new THREE.LineBasicMaterial({ color:0xd9c6ff, transparent:true, opacity:0.9 })); root.add(edge);
+    return { root, box, edge };
+  });
+  blocks.forEach((h,i)=>{ const o=gl.pool.blocks[i]; const frac=Math.min(1,h.life/(h.maxLife||CFG.blockLife));
+    o.root.position.set(h.x+h.w/2,G.wallH/2,h.y+h.h/2);
+    o.box.scale.set(h.w,G.wallH,h.h); o.edge.scale.set(h.w,G.wallH,h.h);
+    o.box.material.opacity=0.28+0.35*frac; o.edge.material.opacity=0.4+0.5*frac; });
+  // --- ghosts (culled players): translucent floating purple sprites; drawn even in fog (god view) ---
+  const ghosts=players.filter(p=>p.role==="interference");
+  syncPool(gl.pool.ghosts, ghosts.length, ()=>{
+    const root=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.SphereGeometry(13,18,14),
+      new THREE.MeshStandardMaterial({ color:0xb79cff, emissive:0x7a5ad0, emissiveIntensity:0.9, transparent:true, opacity:0.6, roughness:0.5 }));
+    body.scale.set(1,1.25,1); root.add(body);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(9,3,2),
+      new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xe6d9ff, emissiveIntensity:1.6 }));
+    eye.position.set(0,4,11); root.add(eye);
+    const glow=glowSprite(0xb79cff,52); glow.position.y=20; root.add(glow);
+    return { root, body, eye, glow };
+  });
+  ghosts.forEach((p,i)=>{ const o=gl.pool.ghosts[i];
+    const bob=Math.sin(performance.now()/380+p.x*0.03)*5;
+    o.root.position.set(p.x,26+bob,p.y); o.root.rotation.y=-p.heading+Math.PI/2;
+    o.body.material.opacity=p.human?0.72:0.5; });
+
+  gl.renderer.render(gl.scene, gl.camera);
+}
+function project3(wx,wy,wz){        // world floor point -> screen px (for fog + markers over the 3D)
+  gl.proj.set(wx, wz||0, wy); gl.proj.project(gl.camera);
+  return { x:(gl.proj.x*0.5+0.5)*VIEW_W, y:(-gl.proj.y*0.5+0.5)*VIEW_H };
+}
+// shockwave rings + particles + the Striker shove cone — these are drawn in the 2D world block, so they
+// were invisible in 3D (hence "I can't see my ability"). Project them to screen so all the juice comes back.
+function drawEffects3D(){
+  // Striker shove — a loud directional blast so you always see the ability fire.
+  // A bright additive wedge that SWEEPS outward as it fades, with a white outline + a muzzle flash.
+  for (const p of players){ if (!(p.shoveT>0)) continue;
+    const acc=clsById(p.cls).accent, DUR=0.34, f=Math.max(0,Math.min(1,p.shoveT/DUR)), grow=1-f;
+    const ap=project3(p.x,p.y,14), reach=CFG.strikeRange*(0.5+0.55*grow);
+    ctx.save(); ctx.globalCompositeOperation="lighter"; ctx.lineJoin="round";
+    ctx.beginPath(); ctx.moveTo(ap.x,ap.y);
+    const N=18; for (let k=0;k<=N;k++){ const a=p.shoveAng-CFG.strikeCone+(2*CFG.strikeCone)*(k/N);
+      const q=project3(p.x+Math.cos(a)*reach, p.y+Math.sin(a)*reach, 14); ctx.lineTo(q.x,q.y); }
+    ctx.closePath();
+    ctx.globalAlpha=0.5*f; ctx.fillStyle=acc; ctx.fill();                 // glowing wedge
+    ctx.globalAlpha=0.95*f; ctx.strokeStyle="#ffffff"; ctx.lineWidth=2.5; ctx.stroke();  // bright edges + leading arc
+    ctx.globalAlpha=0.9*f; ctx.fillStyle="#fff4d6";                       // muzzle flash at the striker
+    ctx.beginPath(); ctx.arc(ap.x,ap.y,7+12*(1-f),0,Math.PI*2); ctx.fill();
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+  for (const r of effects.rings){
+    const c=project3(r.x,r.y,8), e=project3(r.x+r.r,r.y,8), rad=Math.hypot(e.x-c.x,e.y-c.y);
+    ctx.globalAlpha=Math.max(0,r.life/r.max); ctx.strokeStyle=r.color; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(c.x,c.y,rad,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
+  }
+  for (const pt of effects.particles){
+    const s=project3(pt.x,pt.y,10);
+    ctx.globalAlpha=Math.max(0,pt.life/pt.max); ctx.fillStyle=pt.color;
+    ctx.beginPath(); ctx.arc(s.x,s.y,Math.max(1.6,pt.size*1.5),0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+  }
+}
+// per-player readouts (rank, name, dash pips, carrying charge + FULL, stun) projected over the 3D bodies —
+// these lived in drawBody() which only runs in 2D, so re-draw them here so nothing "goes missing" in 3D.
+function drawPlayerLabels3D(){
+  const you=players[0];
+  const fog=(you.role!=="interference");
+  const myView=you.isIt?CFG.itViewRadius:CFG.viewRadius;
+  const ranked=activePlayers().slice().sort((a,b)=>b.score-a.score);   // rank is set in render2D; recompute for 3D
+  players.forEach(p=>p.rank=0); ranked.forEach((p,i)=>p.rank=i+1);
+  ctx.textAlign="center";
+  for (const p of players){
+    if (p.role==="interference"){
+      // GHOST: block charges + recharge timer under it — shown to itself AND everyone (ghosts are meant to be seen meddling)
+      const g=project3(p.x,p.y,G.bodyH+2), full=p.blockCharges>=CFG.blockCharges;
+      const label="BLOCK "+"■".repeat(p.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-p.blockCharges));
+      ctx.font="bold 10px monospace";
+      ctx.fillStyle="rgba(0,0,0,0.55)"; const tw=ctx.measureText(label).width+8;
+      ctx.fillRect(g.x-tw/2,g.y+8,tw,14);
+      ctx.fillStyle="#c9b8ff"; ctx.fillText(label,g.x,g.y+18);
+      if (!full){ ctx.fillStyle="#9a86d6"; ctx.font="9px monospace";
+        ctx.fillText("+1 in "+p.blockRegenT.toFixed(1)+"s",g.x,g.y+30); }
+      continue;
+    }
+    if (!(p===you || !fog || (dist(you,p)<myView && !losBlocked(you,p)))) continue;   // respect fog
+    const s=project3(p.x,p.y,G.bodyH+18);
+    // class + ability indicator on the ground: a ring colored by class (the class tell), filling as the
+    // ability recharges, pulsing when it's READY, with the class letter in the middle. Shown on everyone.
+    if (!p.isIt){ const c=clsById(p.cls), g=project3(p.x,p.y,3), rx=18, ry=8;
+      ctx.lineWidth=3.5; ctx.strokeStyle="rgba(255,255,255,0.22)";   // ability-cooldown ring around every player
+      ctx.beginPath(); ctx.ellipse(g.x,g.y,rx,ry,0,0,Math.PI*2); ctx.stroke();
+      const frac=p.abilCdT<=0?1:1-p.abilCdT/c.cd;
+      ctx.lineWidth=4; ctx.strokeStyle=p.abilCdT<=0?c.accent:rgba(c.accent,0.75);
+      ctx.beginPath(); ctx.ellipse(g.x,g.y,rx,ry,0,-Math.PI/2,-Math.PI/2+frac*Math.PI*2); ctx.stroke();
+      if (p.abilCdT<=0){ const pl=0.5+0.5*Math.sin(performance.now()/200);   // READY: glowing pulse
+        ctx.strokeStyle=rgba(c.accent,0.15+pl*0.3); ctx.lineWidth=6;
+        ctx.beginPath(); ctx.ellipse(g.x,g.y,rx,ry,0,0,Math.PI*2); ctx.stroke(); }
+      ctx.fillStyle=c.accent; ctx.font="bold 9px monospace"; ctx.textBaseline="middle";
+      ctx.fillText(CLS_LETTER[p.cls]||"?",g.x,g.y); ctx.textBaseline="alphabetic";
+      if (p.human && p.abilCdT>0){ ctx.fillStyle=c.accent; ctx.font="10px monospace"; ctx.fillText(p.abilCdT.toFixed(1)+"s",g.x,g.y-ry-6); }
+    }
+    if (p.stun>0){ ctx.fillStyle="#ffe27a"; ctx.font="14px monospace"; ctx.fillText("★",s.x,s.y-26); }
+    if (p.rank){ ctx.fillStyle=rankColor(p.rank); ctx.font="bold 13px monospace"; ctx.fillText(ordinal(p.rank),s.x,s.y-13); }
+    ctx.fillStyle=p.human?"#eaffff":(p.isIt?"rgba(255,150,150,0.9)":"rgba(200,220,240,0.85)");
+    ctx.font=p.human?"bold 12px monospace":"11px monospace"; ctx.fillText(p.name.slice(0,10),s.x,s.y);
+    if (p.wins>0){ const wy=s.y-31;    // gold WIN STAR with the count inside — a persistent brag
+      ctx.font="26px monospace"; ctx.fillStyle="#ffcf3a"; ctx.shadowColor="rgba(255,190,40,0.9)"; ctx.shadowBlur=8;
+      ctx.fillText("★",s.x,wy); ctx.shadowBlur=0;
+      ctx.fillStyle="#5a3d00"; ctx.font="bold 11px monospace"; ctx.textBaseline="middle"; ctx.fillText(String(p.wins),s.x,wy-9); ctx.textBaseline="alphabetic"; }
+    if (p.carrying){ const frac=clamp(p.carrying.value/CFG.carryGrowCap,0,1), full=frac>=0.999;
+      if (p.human){
+        // YOUR own core meter — big, unmistakable, so you can read the fill and the moment it caps.
+        const cy=s.y+18, R=20, pulse=0.5+0.5*Math.sin(performance.now()/(full?120:300));
+        ctx.strokeStyle="rgba(0,0,0,0.55)"; ctx.lineWidth=8; ctx.beginPath(); ctx.arc(s.x,cy,R,0,Math.PI*2); ctx.stroke();  // dark backing so it reads over any glow
+        ctx.strokeStyle="rgba(255,255,255,0.20)"; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(s.x,cy,R,0,Math.PI*2); ctx.stroke();
+        ctx.lineCap="round"; ctx.strokeStyle=full?"#fff6b0":"#ffc456"; ctx.lineWidth=6;
+        ctx.beginPath(); ctx.arc(s.x,cy,R,-Math.PI/2,-Math.PI/2+frac*Math.PI*2); ctx.stroke(); ctx.lineCap="butt";
+        if (full){ ctx.strokeStyle="rgba(255,246,176,"+(0.35+pulse*0.5)+")"; ctx.lineWidth=9;  // bright pulsing halo at cap
+          ctx.beginPath(); ctx.arc(s.x,cy,R,0,Math.PI*2); ctx.stroke();
+          ctx.fillStyle="#fff6b0"; ctx.font="bold 11px monospace"; ctx.textBaseline="middle"; ctx.fillText("BANK!",s.x,cy); ctx.textBaseline="alphabetic"; }
+        else { ctx.fillStyle="#ffe08a"; ctx.font="bold 11px monospace"; ctx.textBaseline="middle"; ctx.fillText(Math.round(frac*100)+"%",s.x,cy); ctx.textBaseline="alphabetic"; }
+      } else {
+        const cy=s.y+15, R=12;   // rivals: the compact tell (is it worth stealing?)
+        ctx.strokeStyle="rgba(255,255,255,0.18)"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(s.x,cy,R,0,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle=full?"#fff2a0":"#ffc456"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(s.x,cy,R,-Math.PI/2,-Math.PI/2+frac*Math.PI*2); ctx.stroke();
+        if (full){ ctx.fillStyle="#fff2a0"; ctx.font="bold 8px monospace"; ctx.fillText("FULL",s.x,cy+3); }
+      } }
+    if (p.human){ const g=project3(p.x,p.y,2), n=CFG.dashCharges, gap=9, x0=g.x-((n-1)*gap)/2, yy=g.y+16;
+      for (let i=0;i<n;i++){ ctx.fillStyle=i<p.dashCharges?"#7fe0ff":"#33465a"; ctx.beginPath(); ctx.arc(x0+i*gap,yy,2.6,0,Math.PI*2); ctx.fill(); } }
+  }
+}
+// Striker aim reticle while holding the ability: a cone preview + a LOCK ring on the aim-assist target.
+function drawAimReticle(){
+  const you=players[0];
+  if (!you || !you.aiming || you.cls!=="striker" || you.isIt || you.role==="interference") return;
+  const c=clsById(you.cls);
+  const valid=q => q!==you && q.role!=="interference" && q.immunity<=0 && dist(you,q)<=CFG.strikeRange && !losBlocked(you,q);
+  let aim=you.aimAng, bestQ=null, bestAbs=1e9;
+  for (const q of players){ if(!valid(q)) continue;
+    let da=Math.atan2(q.y-you.y,q.x-you.x)-aim; while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
+    if (Math.abs(da)<bestAbs){ bestAbs=Math.abs(da); bestQ=q; } }
+  const locked = bestQ && bestAbs<CFG.strikeCone*1.05;
+  if (locked) aim=Math.atan2(bestQ.y-you.y,bestQ.x-you.x);
+  const o0=project3(you.x,you.y,14);
+  ctx.save(); ctx.globalCompositeOperation="lighter"; ctx.lineJoin="round";
+  ctx.strokeStyle=locked?"#7dffb0":rgba(c.accent,0.9); ctx.lineWidth=2; ctx.globalAlpha=0.9;
+  ctx.beginPath(); ctx.moveTo(o0.x,o0.y);
+  const N=14; for(let k=0;k<=N;k++){ const a=aim-CFG.strikeCone+(2*CFG.strikeCone)*(k/N);
+    const q=project3(you.x+Math.cos(a)*CFG.strikeRange, you.y+Math.sin(a)*CFG.strikeRange,14); ctx.lineTo(q.x,q.y); }
+  ctx.closePath(); ctx.stroke();
+  const tip=project3(you.x+Math.cos(aim)*CFG.strikeRange, you.y+Math.sin(aim)*CFG.strikeRange,14);
+  ctx.beginPath(); ctx.moveTo(o0.x,o0.y); ctx.lineTo(tip.x,tip.y); ctx.stroke();
+  ctx.restore(); ctx.globalAlpha=1;
+  if (locked){ const t=project3(bestQ.x,bestQ.y,G.bodyH); ctx.strokeStyle="#7dffb0"; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(t.x,t.y,16,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle="#7dffb0"; ctx.font="bold 11px monospace"; ctx.textAlign="center"; ctx.fillText("LOCK",t.x,t.y-20); }
+}
+function render3DOverlay(){
+  ctx.clearRect(0,0,VIEW_W,VIEW_H);
+  updateCamera();
+  const you=players[0];
+  const fog=(you.role!=="interference");
+  const myView=you.isIt?CFG.itViewRadius:CFG.viewRadius;
+  // fog-of-war: darken everything OUTSIDE your projected line-of-sight cone (LOS pillar preserved in 3D)
+  if (fog){
+    const vis=computeVisibility(you,myView);
+    ctx.fillStyle="rgba(4,6,10,0.82)";
+    ctx.beginPath(); ctx.rect(0,0,VIEW_W,VIEW_H);
+    const p0=project3(vis[0].x,vis[0].y); ctx.moveTo(p0.x,p0.y);
+    for (let i=vis.length-1;i>=0;i--){ const pp=project3(vis[i].x,vis[i].y); ctx.lineTo(pp.x,pp.y); }
+    ctx.closePath(); ctx.fill("evenodd");
+  }
+  // beacon: mark IT through the fog
+  if (match.beaconTimer>0 && itIndex>=0){ const it=players[itIndex]; const s=project3(it.x,it.y,G.bodyH);
+    const pulse=0.5+0.5*Math.sin(performance.now()/120);
+    ctx.strokeStyle="rgba(120,220,255,"+Math.min(0.9,match.beaconTimer/CFG.beaconReveal)+")"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(s.x,s.y,14+pulse*5,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle="#78dcff"; ctx.font="11px monospace"; ctx.textAlign="center"; ctx.fillText("IT",s.x,s.y-18); }
+  drawEffects3D();           // rings / particles / shove cone — all the juice, back in 3D
+  drawPlayerLabels3D();      // rank / name / dash pips / carrying charge + class/ability ring — back in 3D
+  drawAimReticle();          // Striker hold-to-aim cone + LOCK target
+  // vignette + terror throb (same mood as 2D)
+  const vg=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.42, VIEW_W/2,VIEW_H/2,VIEW_H*0.82);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.42)");
+  ctx.fillStyle=vg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  if (terrorLevel>0){ const inten=terrorLevel*0.34+terrorFlash*terrorFlash*0.5;
+    const tv=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.26, VIEW_W/2,VIEW_H/2,VIEW_H*0.82);
+    tv.addColorStop(0,"rgba(255,0,0,0)"); tv.addColorStop(0.65,"rgba(255,24,24,"+(inten*0.45)+")"); tv.addColorStop(1,"rgba(255,20,20,"+Math.min(0.85,inten)+")");
+    ctx.fillStyle=tv; ctx.fillRect(0,0,VIEW_W,VIEW_H); }
+  // HUD (screen space, shared with 2D)
+  drawMinimap(); drawScoreboard(); drawFeed(); drawBanner(); drawSelfStatus(); drawAnnounce();
+  if (match.phase==="over") drawResults();
+  updateHudText();
+}
+function render(){
+  if (use3D && gl.ok){
+    try { renderWorld3D(); render3DOverlay(); return; }
+    catch(e){ gl.ok=false; document.getElementById("gl").style.display="none"; console.warn("[3D] render failed -> 2D", e); }
+  }
+  render2D();
+}
+function render2D(){
+  ctx.clearRect(0,0,VIEW_W,VIEW_H);
+  updateCamera();
+  const you=players[0];
+  const fog=(you.role!=="interference");            // culled players get the god view
+  const myView=you.isIt?CFG.itViewRadius:CFG.viewRadius;
+  const vis=fog?computeVisibility(you,myView):null;
+  const sh=effects.shake, ox=(Math.random()*2-1)*sh, oy=(Math.random()*2-1)*sh;
+
+  ctx.save(); ctx.translate(-cam.x+ox,-cam.y+oy);
+  // floor: tinted base + a soft light pooled around you (depth, not a flat black void)
+  const floor=ctx.createLinearGradient(cam.x,cam.y,cam.x,cam.y+VIEW_H);
+  floor.addColorStop(0,"#0d121b"); floor.addColorStop(1,"#090c12");
+  ctx.fillStyle=floor; ctx.fillRect(cam.x-40,cam.y-40,VIEW_W+80,VIEW_H+80);
+  // large floor panels (checker tone + recessed seams) = a real surface under the fine grid
+  const PT=200, gx0=Math.floor((cam.x-40)/PT)*PT, gy0=Math.floor((cam.y-40)/PT)*PT;
+  for (let px=gx0; px<cam.x+VIEW_W+40; px+=PT) for (let py=gy0; py<cam.y+VIEW_H+40; py+=PT){
+    if ((((px/PT)|0)+((py/PT)|0))&1){ ctx.fillStyle="rgba(150,190,230,0.014)"; ctx.fillRect(px,py,PT,PT); } }
+  ctx.strokeStyle="rgba(0,0,0,0.28)"; ctx.lineWidth=2;
+  for (let px=gx0; px<=cam.x+VIEW_W+40; px+=PT){ ctx.beginPath(); ctx.moveTo(px,cam.y-40); ctx.lineTo(px,cam.y+VIEW_H+40); ctx.stroke(); }
+  for (let py=gy0; py<=cam.y+VIEW_H+40; py+=PT){ ctx.beginPath(); ctx.moveTo(cam.x-40,py); ctx.lineTo(cam.x+VIEW_W+40,py); ctx.stroke(); }
+  const pl=ctx.createRadialGradient(you.x,you.y,20, you.x,you.y,myView*1.15);
+  pl.addColorStop(0,"rgba(150,180,210,0.22)"); pl.addColorStop(0.5,"rgba(120,150,190,0.10)"); pl.addColorStop(1,"rgba(96,132,178,0)");
+  ctx.fillStyle=pl; ctx.fillRect(cam.x-40,cam.y-40,VIEW_W+80,VIEW_H+80);
+  drawGrid(false);                                    // dim baseline
+  if (fog){ ctx.save(); clipVis(vis);
+    drawGrid(true);
+    ctx.fillStyle="rgba(130,170,220,0.06)"; ctx.fillRect(cam.x-40,cam.y-40,VIEW_W+80,VIEW_H+80);
+    const gg=ctx.createRadialGradient(you.x,you.y,myView*0.4, you.x,you.y,myView);   // soft fog edge
+    gg.addColorStop(0,"rgba(6,9,13,0)"); gg.addColorStop(1,"rgba(6,9,13,0.9)");
+    ctx.fillStyle=gg; ctx.fillRect(cam.x-40,cam.y-40,VIEW_W+80,VIEW_H+80);
+    ctx.restore(); }
+
+  if (fog) drawShadows(you, myView);                  // walls throw shadows away from your light
+
+  // walls as EXTRUDED 3D blocks that stand up (roof + lit front face + soft cast shadow + neon rim).
+  const WH=CFG.wallH;
+  ctx.save();                                          // pass 0: soft cast shadow on the floor (down-right)
+  ctx.shadowColor="rgba(0,0,0,0.5)"; ctx.shadowBlur=18; ctx.shadowOffsetX=7; ctx.shadowOffsetY=12;
+  ctx.fillStyle="#0a0e14"; for (const w of walls) ctx.fillRect(w.x,w.y,w.w,w.h+WH);
+  ctx.restore();
+  for (const w of walls){                              // pass 1: front (south) faces — the wall's height
+    const ff=ctx.createLinearGradient(0,w.y+w.h,0,w.y+w.h+WH);
+    ff.addColorStop(0,"#26323f"); ff.addColorStop(0.6,"#1b242f"); ff.addColorStop(1,"#10161d");
+    ctx.fillStyle=ff; ctx.fillRect(w.x,w.y+w.h,w.w,WH);
+  }
+  for (const w of walls){                              // pass 2: lit roof + neon rim
+    const rf=ctx.createLinearGradient(w.x,w.y,w.x+w.w*0.4,w.y+w.h);
+    rf.addColorStop(0,"#4a5f79"); rf.addColorStop(1,"#2f3f52");
+    ctx.fillStyle=rf; ctx.fillRect(w.x,w.y,w.w,w.h);
+    ctx.fillStyle="rgba(255,255,255,0.10)"; ctx.fillRect(w.x,w.y,2,w.h);            // left catch-light
+    ctx.fillStyle="rgba(0,0,0,0.30)"; ctx.fillRect(w.x+w.w-2,w.y,2,w.h);            // right shade
+    ctx.save(); ctx.shadowColor="rgba(120,225,255,0.9)"; ctx.shadowBlur=7;         // glowing neon top edge
+    ctx.fillStyle="rgba(150,230,255,0.75)"; ctx.fillRect(w.x,w.y-1,w.w,2); ctx.restore();
+  }
+  for (const d of (match.doors||[])){                 // doors: solid warm when closed, framed gap when open
+    if (d.open){
+      ctx.strokeStyle="rgba(150,200,150,0.4)"; ctx.lineWidth=2; ctx.setLineDash([4,4]);
+      ctx.strokeRect(d.x,d.y,d.w,d.h); ctx.setLineDash([]);
+      const vert=d.h>d.w;                              // little open posts at the jambs
+      ctx.fillStyle="#6a8f6a";
+      if (vert){ ctx.fillRect(d.x,d.y-2,d.w,5); ctx.fillRect(d.x,d.y+d.h-3,d.w,5); }
+      else { ctx.fillRect(d.x-2,d.y,5,d.h); ctx.fillRect(d.x+d.w-3,d.y,5,d.h); }
+    } else {
+      // closed door = an EXTRUDED amber-neon block (matches the wall height, warm accent)
+      const ff=ctx.createLinearGradient(0,d.y+d.h,0,d.y+d.h+WH);
+      ff.addColorStop(0,"#5a3f22"); ff.addColorStop(1,"#2c1e10");
+      ctx.fillStyle=ff; ctx.fillRect(d.x,d.y+d.h,d.w,WH);
+      const rf=ctx.createLinearGradient(d.x,d.y,d.x,d.y+d.h);
+      rf.addColorStop(0,"#9a7038"); rf.addColorStop(1,"#6a4d26");
+      ctx.fillStyle=rf; ctx.fillRect(d.x,d.y,d.w,d.h);
+      ctx.save(); ctx.shadowColor="rgba(255,180,80,0.95)"; ctx.shadowBlur=8;         // amber neon rim
+      ctx.fillStyle="rgba(255,190,90,0.8)"; ctx.fillRect(d.x,d.y-1,d.w,2); ctx.restore();
+      // break progress when IT is smashing through it (the pallet cost)
+      const it2=itIndex>=0?players[itIndex]:null;
+      if (it2 && it2.breakDoor===d){
+        const c={x:d.x+d.w/2,y:d.y+d.h/2}, f=Math.min(1,it2.breakT/CFG.doorBreakTime);
+        ctx.strokeStyle="rgba(0,0,0,0.5)"; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(c.x,c.y,16,0,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle="#ff8a4d"; ctx.lineWidth=5; ctx.beginPath();
+        ctx.arc(c.x,c.y,16,-Math.PI/2,-Math.PI/2+f*Math.PI*2); ctx.stroke();
+      }
+    }
+  }
+  // door prompt when a RUNNER human is near a toggleable door (IT can't toggle — it rams to break)
+  if (you.role!=="interference" && !you.isIt){
+    for (const d of (match.doors||[])){ const c={x:d.x+d.w/2,y:d.y+d.h/2};
+      if (dist(you,c) < Math.max(d.w,d.h)/2+CFG.radius+30){
+        ctx.fillStyle="#ffd479"; ctx.font="bold 11px monospace"; ctx.textAlign="center";
+        ctx.fillText("SPACE", c.x, c.y-Math.max(d.w,d.h)/2-8); break; }
+    }
+  }
+  for (const h of match.hazards){
+    const c={x:h.x+h.w/2,y:h.y+h.h/2};
+    // a gate is a SOLID collidable wall — always show it (dim through fog) so it's never an invisible block
+    const seen = !fog || (dist(you,c)<=myView && !losBlocked(you,c));
+    const a = seen?1:0.4;
+    if (h.col){   // Bulwark Bunker wall — a SEE-THROUGH energy barrier: bodies can't pass, sight can
+      const life=Math.min(1,h.life/(h.maxLife||CFG.cageLife)), sh=0.5+0.5*Math.sin(performance.now()/120+h.x*0.05);
+      ctx.fillStyle=rgba(h.col,(0.10+0.10*sh)*life*a); ctx.fillRect(h.x,h.y,h.w,h.h);   // faint translucent field
+      ctx.save(); ctx.beginPath(); ctx.rect(h.x,h.y,h.w,h.h); ctx.clip();               // shimmer scanlines read as a force-field
+      ctx.strokeStyle=rgba(h.col,0.28*life*a); ctx.lineWidth=1;
+      const along=h.w>h.h; const span=along?h.w:h.h, off=(performance.now()/22)%12;
+      for (let s=-12;s<span+12;s+=12){ ctx.beginPath();
+        if (along){ ctx.moveTo(h.x+s+off,h.y); ctx.lineTo(h.x+s+off,h.y+h.h); } else { ctx.moveTo(h.x,h.y+s+off); ctx.lineTo(h.x+h.w,h.y+s+off); }
+        ctx.stroke(); }
+      ctx.restore();
+      ctx.strokeStyle=rgba(h.col,(0.55+0.4*sh)*life*a); ctx.lineWidth=2.5; ctx.strokeRect(h.x,h.y,h.w,h.h);  // bright humming edge
+    } else {      // ghost temp-block — purple slab that fades as it expires
+      const life=Math.min(1,h.life/(h.maxLife||CFG.blockLife));
+      ctx.fillStyle="rgba(169,139,255,"+(0.20+0.4*life)*a+")"; ctx.fillRect(h.x,h.y,h.w,h.h);
+      ctx.strokeStyle="rgba(217,198,255,"+(0.5+0.4*life)*a+")"; ctx.lineWidth=2; ctx.strokeRect(h.x,h.y,h.w,h.h);
+    }
+  }
+  // BANKS — fixed drop-zones, always visible (known chokepoints). Pulse brighter if you're carrying.
+  for (const b of (match.banks||[])){
+    const pulse=0.5+0.5*Math.sin(performance.now()/300+b.x*0.03);
+    const hot = you.carrying && dist(you,b)<CFG.bankRadius+90;
+    ctx.fillStyle="rgba(120,210,255,"+(hot?0.12:0.05)+")"; ctx.beginPath(); ctx.arc(b.x,b.y,CFG.bankRadius,0,Math.PI*2); ctx.fill();
+    ctx.setLineDash([10,8]); ctx.strokeStyle="rgba(140,225,255,"+(0.4+pulse*0.35+(hot?0.2:0))+")"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(b.x,b.y,CFG.bankRadius,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle="rgba(150,230,255,"+(0.55+pulse*0.4)+")"; ctx.font="bold 11px monospace"; ctx.textAlign="center";
+    ctx.fillText("BANK", b.x, b.y+4);
+    if (hot){ ctx.fillStyle="rgba(150,255,190,0.9)"; ctx.font="10px monospace"; ctx.fillText("▼ DROP IT HERE", b.x, b.y-CFG.bankRadius-8); }
+  }
+  // LOOSE CORES — glow through fog so you can read where the scramble is. Held cores ride the carrier's halo.
+  for (const c of (match.cores||[])){
+    if (!c.live || c.holder) continue;
+    const seen = !fog || (dist(you,c)<myView && !losBlocked(you,c));
+    const a=seen?1:0.4, pulse=0.5+0.5*Math.sin(performance.now()/150+c.x*0.05), hot=c.value>1;
+    ctx.save(); ctx.shadowColor="rgba(255,200,90,0.95)"; ctx.shadowBlur=(12+pulse*12)*a;
+    ctx.fillStyle="rgba(255,214,120,"+((0.7+pulse*0.3)*a)+")";
+    ctx.beginPath(); ctx.arc(c.x,c.y,CFG.coreRadius,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,245,210,"+((0.6+pulse*0.4)*a)+")";
+    ctx.beginPath(); ctx.arc(c.x,c.y,CFG.coreRadius*0.5,0,Math.PI*2); ctx.fill(); ctx.restore();
+    if (seen && hot){ ctx.fillStyle="rgba(255,224,150,0.95)"; ctx.font="bold 10px monospace"; ctx.textAlign="center";
+      ctx.fillText("+"+Math.round(CFG.carryValue+c.value), c.x, c.y-CFG.coreRadius-6); }   // "hot" dropped cores show their worth
+  }
+  // live placement ranking (highest score = 1st) so the avatar labels read correctly
+  const ranked=activePlayers().slice().sort((a,b)=>b.score-a.score);
+  players.forEach(p=>p.rank=0); ranked.forEach((p,i)=>p.rank=i+1);
+  for (const p of players){
+    if (p!==you && fog && (dist(you,p)>myView || losBlocked(you,p))) continue; // fog hides players
+    drawBody(p);
+  }
+  // shockwave rings + particles
+  for (const r of effects.rings){ ctx.globalAlpha=Math.max(0,r.life/r.max); ctx.strokeStyle=r.color; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1; }
+  for (const pt of effects.particles){ ctx.globalAlpha=Math.max(0,pt.life/pt.max); ctx.fillStyle=pt.color;
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+  if (fog) drawMotes(performance.now(), you, myView);   // dust drifting in your light
+  ctx.restore();
+
+  if (match.beaconTimer>0 && itIndex>=0){          // beacon reveals IT through the fog
+    const it=players[itIndex]; ctx.save(); ctx.translate(-cam.x+ox,-cam.y+oy);
+    const pulse=0.5+0.5*Math.sin(performance.now()/120);
+    ctx.strokeStyle="rgba(120,220,255,"+Math.min(0.9,match.beaconTimer/CFG.beaconReveal)+")"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(it.x,it.y,CFG.radius+8+pulse*5,0,Math.PI*2); ctx.stroke();
+    ctx.setLineDash([6,6]); ctx.beginPath(); ctx.moveTo(it.x,it.y-52); ctx.lineTo(it.x,it.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle="#78dcff"; ctx.font="11px monospace"; ctx.textAlign="center"; ctx.fillText("IT",it.x,it.y-58);
+    ctx.restore();
+  }
+
+  // viewport vignette (mood)
+  const vg=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.42, VIEW_W/2,VIEW_H/2,VIEW_H*0.8);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.38)");
+  ctx.fillStyle=vg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+
+  // terror overlay: strong red screen-edge throb that pulses with each heartbeat as IT nears (through walls)
+  if (terrorLevel>0){
+    const inten = terrorLevel*0.34 + terrorFlash*terrorFlash*0.5;
+    const tv=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.26, VIEW_W/2,VIEW_H/2,VIEW_H*0.82);
+    tv.addColorStop(0,"rgba(255,0,0,0)"); tv.addColorStop(0.65,"rgba(255,24,24,"+(inten*0.45)+")"); tv.addColorStop(1,"rgba(255,20,20,"+Math.min(0.85,inten)+")");
+    ctx.fillStyle=tv; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  }
+
+  drawMinimap(); drawScoreboard(); drawFeed(); drawBanner(); drawSelfStatus(); drawAnnounce();
+  if (match.phase==="over") drawResults();
+  updateHudText();
+}
+
+function drawMinimap(){
+  const mmW=170, s=mmW/WORLD_W, mmH=WORLD_H*s, ox=14, oy=14;
+  ctx.fillStyle="rgba(8,11,16,0.82)"; ctx.fillRect(ox-4,oy-4,mmW+8,mmH+8);
+  ctx.fillStyle="#26313f";
+  for (const w of walls) ctx.fillRect(ox+w.x*s, oy+w.y*s, Math.max(1,w.w*s), Math.max(1,w.h*s));
+  for (const d of (match.doors||[])){ ctx.fillStyle=d.open?"#3a5a3a":"#7a5a38";  // doors: green open, brown closed
+    ctx.fillRect(ox+d.x*s, oy+d.y*s, Math.max(1.5,d.w*s), Math.max(1.5,d.h*s)); }
+  ctx.strokeStyle="rgba(120,160,210,0.5)"; ctx.lineWidth=1; ctx.strokeRect(ox+cam.x*s,oy+cam.y*s,VIEW_W*s,VIEW_H*s);
+  for (const b of (match.banks||[])){   // banks (blue rings) always on the map
+    ctx.strokeStyle="#8fe0ff"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ox+b.x*s,oy+b.y*s,4,0,Math.PI*2); ctx.stroke(); }
+  for (const c of (match.cores||[])){ if (!c.live||c.holder) continue;   // loose cores (amber dots)
+    ctx.fillStyle="#ffd678"; ctx.beginPath(); ctx.arc(ox+c.x*s,oy+c.y*s,2.5,0,Math.PI*2); ctx.fill(); }
+  const you=players[0];
+  ctx.fillStyle=you.isIt?"#ff5a5a":(you.role==="interference"?"#a98bff":"#63e6ff");
+  ctx.beginPath(); ctx.arc(ox+you.x*s,oy+you.y*s,3,0,Math.PI*2); ctx.fill();
+  if (match.beaconTimer>0 && itIndex>=0){ const it=players[itIndex];
+    ctx.fillStyle="#78dcff"; ctx.beginPath(); ctx.arc(ox+it.x*s,oy+it.y*s,3,0,Math.PI*2); ctx.fill(); }
+}
+// Standings — top-right, the glance target. Ranked, your row highlit, a CULL LINE above the
+// lowest active player (when a cut is pending), and gap-to-1st / cull-margin so you instantly
+// know how far from winning or from being cut. Its bottom edge is remembered for the feed below.
+let scoreboardBottom=150;
+function drawScoreboard(){
+  const you=players[0];
+  const list=players.slice().sort((a,b)=>b.score-a.score);
+  const active=list.filter(p=>p.role!=="interference");
+  const cutPending = match.phase==="live" && active.length>3;   // is a cull still coming?
+  const cullTarget = cutPending ? active[active.length-1] : null;  // lowest active = next cut
+  const rowH=27, W=250, x=VIEW_W-W-10, y=12, headH=30;
+  const bodyH=list.length*rowH+14, sumH=cutPending?38:0;
+  ctx.fillStyle="rgba(14,19,27,0.9)"; ctx.fillRect(x,y,W,headH+bodyH+sumH);
+  ctx.fillStyle="#7fd1ff"; ctx.font="bold 16px monospace"; ctx.textAlign="left"; ctx.fillText("STANDINGS",x+14,y+21);
+  ctx.textAlign="right"; ctx.fillStyle="#8aa0b4"; ctx.font="11px monospace"; ctx.fillText("pts",x+W-14,y+21);
+  let ry=y+headH;
+  list.forEach((p,i)=>{
+    if (p===cullTarget){ ctx.strokeStyle="rgba(255,90,90,0.7)"; ctx.lineWidth=1; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.moveTo(x+6,ry-1); ctx.lineTo(x+W-6,ry-1); ctx.stroke(); ctx.setLineDash([]); }
+    if (p.human){ ctx.fillStyle="rgba(120,200,255,0.16)"; ctx.fillRect(x+2,ry,W-4,rowH); }   // highlight YOU
+    const tag=p.role==="interference"?"OUT":p.isIt?"IT":"";
+    ctx.textAlign="left"; ctx.font=p.human?"bold 16px monospace":"15px monospace";
+    ctx.fillStyle=p.isIt?"#ff7a7a":p.role==="interference"?"#8a7bb0":(p.human?"#eaffff":"#cfe3f5");
+    const nameStr=(i+1)+". "+p.name.slice(0,10);
+    ctx.fillText(nameStr,x+14,ry+19);
+    if (tag){ const nw=ctx.measureText(nameStr).width; ctx.font="10px monospace";
+      ctx.fillStyle=p.isIt?"#ff9a9a":"#9a8ac0"; ctx.fillText(tag,x+20+nw,ry+18); }
+    ctx.textAlign="right"; ctx.font=p.human?"bold 17px monospace":"15px monospace"; ctx.fillStyle=p.human?"#ffe6a3":"#d9c07e";
+    ctx.fillText(Math.round(p.score),x+W-14,ry+19);
+    ry+=rowH;
+  });
+  // gap summary — only meaningful while you're still in and cuts loom
+  if (cutPending && you.role!=="interference"){
+    ry+=8; ctx.font="bold 13px monospace"; ctx.textAlign="left";
+    const lead=active[0];
+    const toFirst=you===lead?0:Math.round(lead.score-you.score);
+    ctx.fillStyle="#ffd479"; ctx.fillText(you===lead?"★ 1st place":("to 1st: +"+toFirst),x+14,ry+10);
+    ctx.textAlign="right";
+    if (you===cullTarget){ ctx.fillStyle="#ff7a7a"; ctx.fillText("ON THE CHOP!",x+W-14,ry+10); }
+    else { const margin=Math.round(you.score-cullTarget.score); ctx.fillStyle=margin<15?"#ffb060":"#8fdc9f";
+      ctx.fillText("cull margin: "+margin,x+W-14,ry+10); }
+  }
+  scoreboardBottom=y+headH+bodyH+sumH+6;
+}
+// events feed now lives UNDER the scoreboard (top-right), so the important reads are all up top
+function drawFeed(){
+  ctx.textAlign="right"; ctx.font="11px monospace"; const x=VIEW_W-14;
+  match.feed.forEach((f,i)=>{ f.t-=1/60;
+    ctx.fillStyle="rgba(190,210,230,"+clamp(f.t/2,0,0.85)+")"; ctx.fillText(f.text, x, scoreboardBottom+16+i*16); });
+  match.feed=match.feed.filter(f=>f.t>0);
+}
+function drawBanner(){
+  ctx.textAlign="center"; ctx.font="bold 15px monospace"; let msg="";
+  if (match.phase==="grace") msg="GET READY — "+Math.ceil(match.t);
+  else if (match.phase==="live"){ const next=match.marksLeft.length?Math.ceil(match.marksLeft[0]-match.elapsed):null;
+    msg=next!=null?("CUT in "+next+"s — lowest score out  ("+activePlayers().length+" left)"):(activePlayers().length+" left"); }
+  else if (match.phase==="showdown") msg="SHOWDOWN — "+Math.ceil(match.t)+"s  (bank cores!)";
+  if (msg){ ctx.fillStyle="rgba(19,26,36,0.8)"; ctx.fillRect(VIEW_W/2-130,8,260,24);
+    ctx.fillStyle="#ffd479"; ctx.fillText(msg,VIEW_W/2,25); }
+}
+// your live combat state, top-center under the banner (moved off the bottom so it's where your eyes are)
+function drawSelfStatus(){
+  const you=players[0]; if (!you) return;
+  const y=62; ctx.textAlign="left"; ctx.font="bold 18px monospace";
+  const chips=[];
+  if (you.isIt) chips.push({t:"YOU ARE IT",c:"#ff7a7a"});
+  else if (you.role==="interference"){ chips.push({t:"OUT — GHOST",c:"#a98bff"});
+    chips.push({t:"BLOCK "+"■".repeat(you.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-you.blockCharges)), c:"#c9b8ff"});
+  }
+  if (you.role!=="interference"){
+    chips.push({t:"DASH "+"●".repeat(you.dashCharges)+"○".repeat(Math.max(0,CFG.dashCharges-you.dashCharges)), c:"#7fe0ff"});
+    const c=clsById(you.cls), ready=you.abilCdT<=0&&!you.isIt;
+    chips.push({t:c.abil+(you.isIt?" (IT)":ready?" READY":" "+you.abilCdT.toFixed(1)+"s"), c:ready?c.accent:"#5c6c7c"});
+  }
+  if (you.carrying){ const full=you.carrying.value>=CFG.carryGrowCap-0.01, amt=Math.round(CFG.carryValue+you.carrying.value);
+    chips.push({t:full?("CORE FULL +"+amt+" — BANK IT!"):("CARRYING +"+amt), c:full?"#fff2a0":"#ffd678"}); }
+  if (you.stun>0) chips.push({t:"STUNNED",c:"#ffe27a"});
+  if (!chips.length) return;
+  const gap=24; let total=0; for (const ch of chips) total+=ctx.measureText(ch.t).width+gap; total-=gap;
+  let sx=VIEW_W/2-total/2;
+  ctx.fillStyle="rgba(12,17,24,0.8)"; ctx.fillRect(sx-16,y-20,total+32,30);
+  for (const ch of chips){ ctx.fillStyle=ch.c; ctx.fillText(ch.t,sx,y); sx+=ctx.measureText(ch.t).width+gap; }
+}
+// big center-screen announcement for culls + showdown: scales in, holds, fades
+function drawAnnounce(){
+  const a=match.announce; if (!a) return;
+  const f=a.t/a.max;                                   // 1 -> 0 over its life
+  const appear=Math.min(1,(1-f)*4);                    // quick scale/fade in
+  const fade=Math.min(1,a.t/0.5);                      // fade out in the last 0.5s
+  const alpha=Math.max(0,Math.min(appear,fade)), scale=0.78+0.22*appear;
+  ctx.save(); ctx.textAlign="center"; ctx.globalAlpha=alpha;
+  ctx.translate(VIEW_W/2, VIEW_H*0.30); ctx.scale(scale,scale);
+  ctx.font="bold 42px monospace"; const w=Math.max(ctx.measureText(a.text).width, a.sub?ctx.measureText(a.sub).width*1.6:0);
+  ctx.fillStyle="rgba(8,11,16,0.62)"; ctx.fillRect(-w/2-30,-42,w+60,a.sub?92:64);
+  ctx.shadowColor=a.col; ctx.shadowBlur=26; ctx.fillStyle=a.col; ctx.fillText(a.text,0,4); ctx.shadowBlur=0;
+  if (a.sub){ ctx.font="15px monospace"; ctx.fillStyle="#cfe3f5"; ctx.fillText(a.sub,0,34); }
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawResults(){
+  if (!match.results){ return; }   // guard: phase can flip to "over" a frame before results land (e.g. a client's snapshot)
+  ctx.fillStyle="rgba(8,11,16,0.88)"; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  ctx.textAlign="center"; ctx.fillStyle="#7fd1ff"; ctx.font="bold 26px monospace"; ctx.fillText("RESULTS",VIEW_W/2,118);
+  ctx.font="12px monospace"; ctx.fillStyle="#8aa0b4"; ctx.fillText("finalists up top · winner took the Showdown",VIEW_W/2,138);
+  ctx.font="16px monospace";
+  match.results.forEach((p,i)=>{ const y=176+i*30;
+    ctx.fillStyle=p.place===1?"#ffd479":p.human?"#eaffff":"#9fb4c8";
+    const out=p.role==="interference"?" (culled)":"";
+    ctx.fillText("#"+p.place+"   "+p.name+(p.human?" (you)":"")+out+"   "+Math.round(p.score)+" pts",VIEW_W/2,y); });
+  ctx.fillStyle="#8aa0b4"; ctx.font="13px monospace";
+  ctx.fillText("Press R to play again  ·  C to change your look",VIEW_W/2,176+match.results.length*30+28);
+}
+function updateHudText(){
+  const you=players[0]; let role;
+  if (you.role==="interference") role="You're OUT — GHOST: phase through walls · <span class='k'>L-click / R-click</span> drop a 10s block (2 charges) · <span class='k'>Space</span> reveal IT · full-map view";
+  else if (you.isIt) role="You are IT — touch someone to pass it on. <b>You can't carry or score while IT!</b>";
+  else role="Grab a <b>core</b> · run it to a <b>BANK</b> to score. Tagged or shoved = you drop it.";
+  // live status (dash/ability/carrying/score) now renders on the canvas up top (drawSelfStatus + scoreboard);
+  // the bottom bar keeps only the low-urgency objective hint + controls.
+  statusEl.innerHTML="<b>"+role+"</b>";
+  const cc=clsById(you.cls);
+  const abilHint = you.cls==="striker" ? "hold <span class='k'>R-click</span> aim · release "+cc.abil : "<span class='k'>R-click</span> "+cc.abil;
+  tipsEl.innerHTML="<span style='color:"+cc.accent+"'>"+cc.name+"</span> · <span class='k'>WASD</span> move · <span class='k'>Space</span> dash · "+
+    abilHint+" · <span class='k'>L-click</span> door · run into carriers to steal · <span class='k'>M</span>/<span class='k'>N</span> audio";
+}
+
+// ============================================================
+// TUNING PANEL
+// ============================================================
+(function buildTune(){
+  const panel=document.getElementById("tune");
+  const groups={
+    "Vision / fog":["viewRadius","itViewRadius","visRays"],
+    "IT":["itMaxSpeed","itAccel","itScoreBleed"],
+    "Runner":["runnerMaxSpeed","runnerAccel","decel"],
+    "Dash":["dashSpeed","dashTime","dashTurn","itDashTurnMult","dashRegen"],
+    "Carry / bank":["coreCount","carryValue","carryGrow","carryGrowCap","carrySlow","bankRadius"],
+    "Abilities":["strikeKnock","strikeRange","strikeStun","strikeCd","cageRad","cageLife","cageCd","blinkDist"],
+    "Tag / doors":["tagStun","tagbackImmunity","doorBreakTime","showdownTime"],
+  };
+  const ranges={
+    viewRadius:[120,600,10], itViewRadius:[120,700,10], visRays:[40,300,10],
+    itMaxSpeed:[120,360,5], itAccel:[600,3600,50], itScoreBleed:[0,10,0.5],
+    runnerMaxSpeed:[120,360,5], runnerAccel:[600,3600,50], decel:[400,3000,50],
+    dashSpeed:[300,900,20], dashTime:[0.08,0.32,0.01], dashTurn:[0,26,0.5], itDashTurnMult:[0,1,0.05], dashRegen:[0.2,5,0.1],
+    coreCount:[1,6,1], carryValue:[2,30,1], carryGrow:[0,20,1], carryGrowCap:[0,60,2], carrySlow:[0.5,1,0.02], bankRadius:[30,90,2],
+    strikeKnock:[150,1100,10], strikeRange:[80,240,5], strikeStun:[0.1,1.2,0.05], strikeCd:[2,12,0.5], cageRad:[36,90,2], cageLife:[0.8,5,0.1], cageCd:[3,15,0.5], blinkDist:[80,260,5],
+    tagStun:[0,2,0.05], tagbackImmunity:[0,8,0.5], doorBreakTime:[0.2,2,0.05], showdownTime:[20,120,5],
+  };
+  let html="<h4 style='margin-top:0'>Tuning (T to hide)</h4>";
+  for (const g in groups){ html+="<h4>"+g+"</h4>";
+    for (const k of groups[g]){ const [mn,mx,st]=ranges[k];
+      html+="<label>"+k+" <span><input type=range min="+mn+" max="+mx+" step="+st+
+        " value="+CFG[k]+" data-k='"+k+"'><b id='v_"+k+"'>"+CFG[k]+"</b></span></label>"; } }
+  panel.innerHTML=html;
+  panel.addEventListener("input",e=>{ const k=e.target.getAttribute("data-k"); if(!k) return;
+    CFG[k]=parseFloat(e.target.value); document.getElementById("v_"+k).textContent=CFG[k]; });
+})();
+
+// ============================================================
+// START / CUSTOMIZE MENU
+// ============================================================
+const menuEl = document.getElementById("menu");
+const pcv = document.getElementById("pcv"), pctx = pcv.getContext("2d");
+// --- start-screen model preview: renders the REAL 3D class rig (same models as in-game) into the
+// menu canvas via a small dedicated Three renderer, spinning slowly. Falls back to the 2D pawn if
+// WebGL/Three is unavailable or the player uploaded a photo avatar (which only the 2D top-face shows).
+let menuGL=null;
+function initMenuGL(){
+  if (menuGL!==null || typeof THREE==="undefined") return menuGL;
+  try {
+    const cv=document.createElement("canvas"); cv.width=236; cv.height=236;
+    const rnd=new THREE.WebGLRenderer({ canvas:cv, antialias:true, alpha:true, preserveDrawingBuffer:true });
+    rnd.setPixelRatio(1); rnd.setSize(236,236,false); rnd.outputEncoding=THREE.sRGBEncoding;
+    const scene=new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0x9fc4ff,0x0c1018,0.95));
+    scene.add(new THREE.AmbientLight(0x445066,0.5));
+    const key=new THREE.DirectionalLight(0xffffff,1.05); key.position.set(70,130,110); scene.add(key);
+    const rim=new THREE.DirectionalLight(0x6ea0ff,0.75); rim.position.set(-90,50,-70); scene.add(rim);
+    const cam=new THREE.PerspectiveCamera(36,1,1,2000); cam.position.set(0,44,100); cam.lookAt(0,27,0);   // pulled in so the model fills more of the tile
+    const holder=new THREE.Group(); scene.add(holder);
+    menuGL={ cv, rnd, scene, cam, holder, cls:null, rig:null };
+  } catch(e){ menuGL=false; }   // false = tried and failed; never retry
+  return menuGL;
+}
+function menuPreview3D(){
+  const m=initMenuGL(); if (!m) return false;
+  if (m.cls!==custom.cls){
+    if (m.rig) m.holder.remove(m.rig.group);
+    m.rig = custom.cls==="bulwark"?buildBulwarkRig() : custom.cls==="warden"?buildWardenRig() : buildStrikerRig();
+    m.holder.add(m.rig.group); m.cls=custom.cls;
+  }
+  const accN=parseInt(clsById(custom.cls).accent.slice(1),16);
+  const colN=parseInt((custom.color||clsById(custom.cls).accent).slice(1),16);
+  m.rig.body.forEach(mat=>{ mat.color.setHex(colN); mat.emissive.setHex(accN); mat.emissiveIntensity=0.3; });
+  m.rig.accent.forEach(mat=>{ mat.color.setHex(accN); mat.emissive.setHex(accN); mat.emissiveIntensity=mat.userData.baseInt||1.5; });
+  m.holder.rotation.y = performance.now()/1500;       // slow turntable so you see the whole silhouette
+  m.rnd.render(m.scene, m.cam);
+  return true;
+}
+function drawPreview(){
+  pctx.clearRect(0,0,pcv.width,pcv.height);
+  const x=pcv.width/2, y=pcv.height/2+8, r=32, h=Math.PI/2;
+  if (menuPreview3D()){
+    pctx.drawImage(menuGL.cv, 0, 0, pcv.width, pcv.height);
+  } else {   // 2D fallback (WebGL unavailable)
+    pctx.fillStyle="rgba(0,0,0,0.35)"; pctx.beginPath();
+    pctx.ellipse(x,y+r*0.9,r*0.95,r*0.34,0,0,Math.PI*2); pctx.fill();
+    drawUnit(pctx,x,y,r,h,{cls:custom.cls,isIt:false,color:custom.color,img:null});
+  }
+}
+// keep the preview spinning while the menu is up (stops once a match starts)
+let _menuRAF=0;
+function menuLoop(){ if (started){ _menuRAF=0; return; } drawPreview(); _menuRAF=requestAnimationFrame(menuLoop); }
+function startMenuLoop(){ if (!_menuRAF) _menuRAF=requestAnimationFrame(menuLoop); }
+// audio control wiring (mute button + music volume slider) — works on the menu and in-game
+(function buildAudioCtl(){
+  const mb=document.getElementById("muteBtn"), vs=document.getElementById("volSlider");
+  if (mb) mb.onclick=()=>{ initAudio(); toggleMuteAll(); };
+  if (vs){ vs.value=Math.round(musVol*100);
+    vs.oninput=()=>{ initAudio(); setMusVol((+vs.value||0)/100); }; }
+  refreshAudioUI();
+  // ANY first interaction (incl. clicking menu buttons/swatches, which don't hit the canvas) unlocks
+  // audio + starts the lobby track — this is why menu music sometimes never kicked in.
+  const kick=()=>{ initAudio(); if(!started && musOn) startMusic("menu"); };
+  document.addEventListener("pointerdown", kick);
+  document.addEventListener("keydown", kick);
+})();
+(function buildMenu(){
+  // class picker — the identity choice (drives the chassis + the Q ability)
+  const cls=document.getElementById("classes"), info=document.getElementById("classInfo");
+  const setInfo=id=>{ const c=clsById(id); info.innerHTML="<b style='color:"+c.accent+"'>"+c.role+"</b> · <b style='color:"+c.accent+"'>R-click: "+c.abil+"</b> — "+c.tip; };
+  CLASSES.forEach(c=>{ const b=document.createElement("div");
+    b.className="cls"+(c.id===custom.cls?" sel":"");
+    b.style.borderColor = c.id===custom.cls ? c.accent : "";
+    b.innerHTML="<b style='color:"+c.accent+"'>"+c.name+"</b><small>"+c.role+"</small>";
+    b.onclick=()=>{ custom.cls=c.id;
+      cls.querySelectorAll(".cls").forEach(e=>{ e.classList.remove("sel"); e.style.borderColor=""; });
+      b.classList.add("sel"); b.style.borderColor=c.accent; setInfo(c.id); drawPreview(); };
+    cls.appendChild(b); });
+  setInfo(custom.cls);
+  const sw=document.getElementById("swatches");
+  COLORS.forEach(c=>{ const d=document.createElement("div"); d.className="sw"+(c===custom.color?" sel":"");
+    d.style.background=c; d.title=c;
+    d.onclick=()=>{ custom.color=c; custom.img=null; custom.imgSrc=null;   // picking a color clears the photo
+      sw.querySelectorAll(".sw").forEach(e=>e.classList.remove("sel"));
+      d.classList.add("sel"); drawPreview(); };
+    sw.appendChild(d); });
+  // map picker — the host's choice; applied live so the 3D preview behind the menu shows it too
+  const mp=document.getElementById("maps");
+  if (mp){ MAP_IDS.forEach(id=>{ const b=document.createElement("div");
+    b.className="cls"+(id===currentMapId?" sel":"");
+    if (id===currentMapId) b.style.borderColor="#7fd1ff";
+    b.innerHTML="<b style='color:#cfe6ff'>"+MAPS[id].name+"</b>";
+    b.onclick=()=>{ applyMap(id);
+      mp.querySelectorAll(".cls").forEach(e=>{ e.classList.remove("sel"); e.style.borderColor=""; });
+      b.classList.add("sel"); b.style.borderColor="#7fd1ff"; };
+    mp.appendChild(b); }); }
+  const nameEl=document.getElementById("pname");
+  nameEl.value=custom.name;
+  nameEl.addEventListener("keydown", e=>{ if(e.key==="Enter") startGame(); });
+  document.getElementById("play").onclick=startGame;
+  const hb=document.getElementById("hostBtn"), jb=document.getElementById("joinBtn");
+  if (hb) hb.onclick=()=>{ initAudio(); hostGame(); };
+  if (jb) jb.onclick=()=>{ initAudio(); joinGame(); };
+  drawPreview(); startMenuLoop();
+})();
+function startGame(){
+  const nm=(document.getElementById("pname").value||"You").trim();
+  custom.name = nm || "You";
+  menuEl.classList.add("hide");
+  initAudio();                   // PLAY is a user gesture -> unlock audio
+  reset(); started=true; last=performance.now();
+  startMusic("game");            // swap the lobby track for the in-game bed
+}
+function openMenu(){ started=false; menuEl.classList.remove("hide"); startMusic("menu"); drawPreview(); startMenuLoop(); }
+
+reset();                       // init the world behind the menu
+initGL();                      // spin up the 3D scene (no-op / falls back if WebGL or Three is unavailable)
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
