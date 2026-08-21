@@ -66,6 +66,10 @@
     background: rgba(19,26,36,0.82); border: 1px solid #26313f; border-radius: 8px; padding: 6px 10px; }
   #audioctl #muteBtn { background: none; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 0; }
   #audioctl #volSlider { width: 90px; cursor: pointer; accent-color: #7fd1ff; }
+  /* FPS + quality readout — small, bottom-left, out of the HUD's way; hidden until in a match */
+  #fps { position: fixed; left: 12px; bottom: 10px; z-index: 60; display: none; font: 12px/1.2 monospace;
+    color: #7fe6a6; background: rgba(10,14,20,0.7); border: 1px solid #26313f; border-radius: 6px;
+    padding: 3px 8px; letter-spacing: .5px; cursor: pointer; user-select: none; }
 </style>
 </head>
 <body>
@@ -82,6 +86,7 @@
   <button id="muteBtn" title="Mute all (M / N)">🔊</button>
   <input id="volSlider" type="range" min="0" max="100" value="85" title="Music volume" />
 </div>
+<div id="fps" title="Press F to change quality">–</div>
 
 <div id="menu">
   <h1>THE CULL</h1>
@@ -420,7 +425,8 @@ function resizeCanvas(){
   VIEW_W = Math.max(320, Math.round(window.innerWidth));
   VIEW_H = Math.max(240, Math.round(window.innerHeight));
   canvas.width = VIEW_W; canvas.height = VIEW_H;
-  if (typeof gl!=="undefined" && gl.ok){ gl.renderer.setSize(VIEW_W,VIEW_H,false);
+  if (typeof gl!=="undefined" && gl.ok){ const sc=gl.renderScale||1;   // keep the active quality's internal resolution on resize
+    gl.renderer.setSize(Math.round(VIEW_W*sc),Math.round(VIEW_H*sc),false);
     gl.camera.aspect=VIEW_W/VIEW_H; gl.camera.updateProjectionMatrix(); }
 }
 window.addEventListener("resize", resizeCanvas);
@@ -443,6 +449,75 @@ function updateEffects(dt){
     p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.9; p.vy*=0.9; p.life-=dt; if (p.life<=0) effects.particles.splice(i,1); }
   for (let i=effects.rings.length-1;i>=0;i--){ const r=effects.rings[i];
     r.life-=dt; r.r += (r.maxR-r.r)*Math.min(1,dt*12); if (r.life<=0) effects.rings.splice(i,1); }
+}
+// ============================================================
+// PERFORMANCE — an on-screen FPS + quality readout, and an ADAPTIVE quality system that auto-drops
+// on weak GPUs (the two biggest live levers: internal render resolution + shadow cost). Press F (or
+// click the readout) to lock a level manually.
+// ============================================================
+let fpsShown=0, _fpsFrames=0, _fpsAcc=0;
+let qLevel=2, qAuto=true, _qLowT=0, _qHighT=0;         // qLevel 0=LOW 1=MED 2=HIGH
+const QNAMES=["LOW","MED","HIGH"];
+function tickFPS(rawDt){
+  _fpsFrames++; _fpsAcc+=rawDt;
+  if (_fpsAcc>=0.5){ fpsShown=Math.round(_fpsFrames/_fpsAcc); _fpsFrames=0; _fpsAcc=0;
+    if (qAuto) autoTune(fpsShown); updateFpsUI(); }
+}
+function updateFpsUI(){ const el=document.getElementById("fps"); if(!el) return;
+  el.style.display = started ? "block" : "none";
+  el.textContent = fpsShown+" FPS · "+QNAMES[qLevel]+(qAuto?"":" 🔒");
+  el.style.color = fpsShown>=52?"#7fe6a6":fpsShown>=34?"#ffd166":"#ff7a7a";
+}
+function autoTune(fps){                                 // step DOWN fast on sustained low FPS, back UP only cautiously
+  if (qLevel>0 && fps<38){ _qLowT++; if(_qLowT>=3){ qLevel--; _qLowT=0; _qHighT=0; applyQuality(); } } else _qLowT=Math.max(0,_qLowT-1);
+  if (qLevel<2 && fps>=58){ _qHighT++; if(_qHighT>=16){ qLevel++; _qHighT=0; applyQuality(); } } else _qHighT=Math.max(0,_qHighT-1);
+}
+function setQuality(q, manual){ qLevel=Math.max(0,Math.min(2,q)); if(manual){ qAuto=false; } applyQuality(); }
+function applyQuality(){
+  if (!(typeof gl!=="undefined" && gl.ok)) return;
+  const scale = qLevel===2?1.0 : qLevel===1?0.82 : 0.6;   // internal render resolution (upscaled by CSS)
+  gl.renderScale=scale;
+  gl.renderer.setSize(Math.round(VIEW_W*scale), Math.round(VIEW_H*scale), false);
+  if (gl.sun){                                            // shadows: HIGH 1024, MED 512, LOW off (biggest cost when players cluster)
+    if (qLevel===0){ gl.sun.castShadow=false; }
+    else { gl.sun.castShadow=true; const sz=qLevel===2?1024:512;
+      if (gl.sun.shadow.mapSize.width!==sz){ gl.sun.shadow.mapSize.set(sz,sz);
+        if (gl.sun.shadow.map){ gl.sun.shadow.map.dispose(); gl.sun.shadow.map=null; } } }
+  }
+  updateFpsUI();
+}
+// Strong "you became IT" feedback (the subtle red shader alone was too easy to miss): a red screen
+// flash + a big center stinger + a shake + a ring, edge-triggered off YOUR player's isIt flag so it
+// fires for the host human AND for clients (players[0] is always "you").
+let itAlertT=0, _wasIt=false;
+function updateItAlert(dt){
+  const you=players[0], nowIt=!!(you && you.isIt && you.role!=="interference");
+  if (nowIt && !_wasIt){ itAlertT=1.8; addShake(12); if(you) spawnRing(you.x,you.y,"#ff3020",100); try{ sfx("it"); }catch(e){} }
+  _wasIt=nowIt;
+  if (itAlertT>0) itAlertT=Math.max(0, itAlertT-dt);
+}
+function drawItAlert(){
+  if (itAlertT<=0) return;
+  const t=itAlertT, f=t/1.8, pulse=0.5+0.5*Math.sin(performance.now()/80);
+  ctx.save();
+  // 1) a hard full-screen red HIT for the first ~0.18s (unmissable), then...
+  const hit=Math.max(0,(t-1.62)/0.18);                    // 1 -> 0 over the first 0.18s
+  if (hit>0){ ctx.fillStyle="rgba(255,45,32,"+(0.5*hit)+")"; ctx.fillRect(0,0,VIEW_W,VIEW_H); }
+  // 2) a pulsing red vignette that lingers the whole duration
+  const flash=0.5*f*f + 0.16*f*pulse;
+  const grd=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,Math.min(VIEW_W,VIEW_H)*0.12, VIEW_W/2,VIEW_H/2,Math.max(VIEW_W,VIEW_H)*0.66);
+  grd.addColorStop(0,"rgba(255,40,30,0)"); grd.addColorStop(1,"rgba(255,26,16,"+flash+")");
+  ctx.fillStyle=grd; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  // 3) the big center stinger — pops in fast, holds, fades out at the end
+  const appear=Math.min(1,(1.8-t)*9), fade=Math.min(1,t/0.5), a=Math.max(0,Math.min(appear,fade));
+  ctx.globalAlpha=a; ctx.textAlign="center";
+  ctx.translate(VIEW_W/2, VIEW_H*0.40); const sc=(0.86+0.14*appear)*(1+0.04*pulse); ctx.scale(sc,sc);
+  ctx.font="bold 30px monospace"; ctx.fillStyle="#ffd0c8"; ctx.fillText("▼ ▼ ▼",0,-58);
+  ctx.font="900 76px monospace"; ctx.shadowColor="#ff2a1a"; ctx.shadowBlur=36;
+  ctx.lineWidth=4; ctx.strokeStyle="rgba(60,0,0,0.9)"; ctx.strokeText("YOU'RE IT",0,0);
+  ctx.fillStyle="#ff5646"; ctx.fillText("YOU'RE IT",0,0); ctx.shadowBlur=0;
+  ctx.font="17px monospace"; ctx.fillStyle="#ffe0d8"; ctx.fillText("run them down — tag someone to pass it on",0,38);
+  ctx.restore(); ctx.globalAlpha=1;
 }
 function shade(hex,f){ const n=parseInt(hex.slice(1),16), r=(n>>16)&255,g=(n>>8)&255,b=n&255;
   return "rgb("+Math.round(r*f)+","+Math.round(g*f)+","+Math.round(b*f)+")"; }
@@ -657,6 +732,7 @@ window.addEventListener("keydown", e => {
   if (k === "n"){ musOn=!musOn; if (musOn) startMusic(started?"game":"menu"); else stopMusic(); refreshAudioUI(); }   // music toggle
   if (k === "t") document.getElementById("tune").classList.toggle("show");
   if (k === "g" && gl.ok){ use3D=!use3D; document.getElementById("gl").style.display=use3D?"block":"none"; }  // toggle 3D / 2D
+  if (k === "f"){ setQuality((qLevel+1)%3, true); }              // cycle + LOCK graphics quality (LOW/MED/HIGH)
 });
 window.addEventListener("keyup", e => { const k=e.key.toLowerCase(); keys[k]=false; if (k==="q") abilHeld=false; });
 // Mouse controls (desktop primary): LMB = open/close doors, RMB = class ability (aimed at the cursor), Space = dash.
@@ -1379,9 +1455,9 @@ function cull(){
   const act=activePlayers(); if (act.length<=3) return;
   let worst=act[0]; for (const q of act) if (q.score<worst.score) worst=q;   // LOWEST score gets cut
   const wi=players.indexOf(worst);
-  if (worst.isIt){ let low=null;                                    // IT got culled -> LOWEST-score survivor becomes IT
-    for (const q of act){ if(q===worst) continue; if(!low||q.score<low.score) low=q; }
-    if (low) passIt(wi, players.indexOf(low), false); }
+  if (worst.isIt){ let top=null;                                    // IT got culled -> 1st-place (highest-score) survivor becomes IT
+    for (const q of act){ if(q===worst) continue; if(!top||q.score>top.score) top=q; }
+    if (top){ passIt(wi, players.indexOf(top), false); feed(top.name+" leads — becomes IT"); } }
   dropCore(worst);                                   // culled mid-carry -> fumble the core for the survivors
   worst.role="interference"; worst.isIt=false; worst.aiming=false;
   worst.blockCharges=CFG.blockCharges; worst.blockRegenT=0; worst.beaconCdT=0; worst.culledAt=cullSeq++;
@@ -1557,7 +1633,9 @@ function netClientInput(){ const mv=readMoveKeys(); const you=players[0]; let ai
   return { dx:mv.dx,dy:mv.dy,moving:mv.moving, dash:tapDash,door:tapDoor,abil:tapAbil, aim, aiming: abilHeld?1:0 }; }
 
 function frame(now){
-  let dt=(now-last)/1000; last=now; dt=Math.max(0,Math.min(dt,0.033)); // clamp: never negative, never a huge catch-up step
+  const raw=(now-last)/1000; last=now;
+  let dt=Math.max(0,Math.min(raw,0.033));                 // clamp: never negative, never a huge catch-up step
+  if (started) tickFPS(raw);                              // measure the TRUE frame time (unclamped) for the FPS meter
   if (!started){ requestAnimationFrame(frame); return; }   // paused on the menu
   // --- CLIENT: no local sim. Send input, apply the host's latest snapshot, render. ---
   if (net.mode==="client"){
@@ -1568,7 +1646,7 @@ function frame(now){
     const cd = match.doors ? match.doors.filter(d=>!d.open) : [];
     obstacles = walls.concat(cd).concat(match.hazards||[]);
     losObstacles = walls.concat(cd).concat((match.hazards||[]).filter(h=>!h.noLos));
-    updateEffects(dt); updateTerror(dt); checkWinCredit();
+    updateEffects(dt); updateTerror(dt); updateItAlert(dt); checkWinCredit();
     if (net.waiting || !net.lastSnap) drawNetWaiting(); else render();
     tapDash=false; tapDoor=false; tapAbil=false;
     requestAnimationFrame(frame); return;
@@ -1618,6 +1696,7 @@ function frame(now){
   if (scoring) checkSteals();                 // run-into-a-carrier steal (after movement, so positions are current)
   updateEffects(dt);
   updateTerror(dt);
+  updateItAlert(dt);                          // big "YOU'RE IT" feedback when your isIt flag flips on
   if (match.phase!=="over") checkTag();
   checkWinCredit();
   render();
@@ -1933,7 +2012,8 @@ function initGL(){
     gl.itLight=new THREE.PointLight(0xff4030, 0.0, 520, 2.0); gl.scene.add(gl.itLight);
     buildStaticGL();
     gl.pool={ players:[], cores:[], banks:[], doors:[], cages:[], ghosts:[], blocks:[] };
-    gl.ok=true;
+    gl.renderScale=1; gl.ok=true;
+    applyQuality();                                        // establish the current quality tier's resolution + shadows
     glc.style.display = use3D ? "block" : "none";
   } catch(e){ gl.ok=false; use3D=false; console.warn("[3D] init failed, using 2D", e); }
 }
@@ -2276,7 +2356,11 @@ function drawPlayerLabels3D(){
   ctx.textAlign="center";
   for (const p of players){
     if (p.role==="interference"){
-      // GHOST: block charges + recharge timer under it — shown to itself AND everyone (ghosts are meant to be seen meddling)
+      // GHOST: keep the player's NAME above them (so you can still tell who the ghost is), then the
+      // block charges + recharge timer under it — shown to itself AND everyone (ghosts meddle in the open).
+      const ns=project3(p.x,p.y,G.bodyH+18);
+      ctx.fillStyle=p.human?"#eaffff":"rgba(201,184,224,0.92)";   // ghost-violet name tint
+      ctx.font=p.human?"bold 12px monospace":"11px monospace"; ctx.fillText(p.name.slice(0,10),ns.x,ns.y-6);
       const g=project3(p.x,p.y,G.bodyH+2), full=p.blockCharges>=CFG.blockCharges;
       const label="BLOCK "+"■".repeat(p.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-p.blockCharges));
       ctx.font="bold 10px monospace";
@@ -2393,7 +2477,7 @@ function render3DOverlay(){
     tv.addColorStop(0,"rgba(255,0,0,0)"); tv.addColorStop(0.65,"rgba(255,24,24,"+(inten*0.45)+")"); tv.addColorStop(1,"rgba(255,20,20,"+Math.min(0.85,inten)+")");
     ctx.fillStyle=tv; ctx.fillRect(0,0,VIEW_W,VIEW_H); }
   // HUD (screen space, shared with 2D)
-  drawMinimap(); drawScoreboard(); drawFeed(); drawBanner(); drawSelfStatus(); drawAnnounce();
+  drawMinimap(); drawScoreboard(); drawFeed(); drawBanner(); drawSelfStatus(); drawAnnounce(); drawItAlert();
   if (match.phase==="over") drawResults();
   updateHudText();
 }
@@ -2579,7 +2663,7 @@ function render2D(){
     ctx.fillStyle=tv; ctx.fillRect(0,0,VIEW_W,VIEW_H);
   }
 
-  drawMinimap(); drawScoreboard(); drawFeed(); drawBanner(); drawSelfStatus(); drawAnnounce();
+  drawMinimap(); drawScoreboard(); drawFeed(); drawBanner(); drawSelfStatus(); drawAnnounce(); drawItAlert();
   if (match.phase==="over") drawResults();
   updateHudText();
 }
@@ -2822,6 +2906,7 @@ function startMenuLoop(){ if (!_menuRAF) _menuRAF=requestAnimationFrame(menuLoop
   if (mb) mb.onclick=()=>{ initAudio(); toggleMuteAll(); };
   if (vs){ vs.value=Math.round(musVol*100);
     vs.oninput=()=>{ initAudio(); setMusVol((+vs.value||0)/100); }; }
+  const fe=document.getElementById("fps"); if (fe) fe.onclick=()=>setQuality((qLevel+1)%3, true);   // tap the readout to cycle/lock quality
   refreshAudioUI();
   // ANY first interaction (incl. clicking menu buttons/swatches, which don't hit the canvas) unlocks
   // audio + starts the lobby track — this is why menu music sometimes never kicked in.
@@ -2876,7 +2961,7 @@ function startGame(){
   reset(); started=true; last=performance.now();
   startMusic("game");            // swap the lobby track for the in-game bed
 }
-function openMenu(){ started=false; menuEl.classList.remove("hide"); startMusic("menu"); drawPreview(); startMenuLoop(); }
+function openMenu(){ started=false; menuEl.classList.remove("hide"); const fe=document.getElementById("fps"); if(fe) fe.style.display="none"; startMusic("menu"); drawPreview(); startMenuLoop(); }
 
 reset();                       // init the world behind the menu
 initGL();                      // spin up the 3D scene (no-op / falls back if WebGL or Three is unavailable)
