@@ -1436,21 +1436,23 @@ let last=performance.now();
 // ============================================================
 const net = { mode:null, peer:null, id:null, conns:[], selfSlot:0, inputs:{}, lastSnap:null, snapT:0, snapHz:20, status:"", waiting:false };
 function setNet(html, cls){ const b=document.getElementById("netbox"); if(b) b.innerHTML = cls? "<span class='"+cls+"'>"+html+"</span>" : html; }
-function netTeardown(){ if(net.peer){ try{net.peer.destroy();}catch(e){} } net.mode=null; net.peer=null; net.id=null; net.conns=[]; net.inputs={}; net.lastSnap=null; net.selfSlot=0; net.waiting=false; }
+function netTeardown(){ if(net.peer){ try{net.peer.destroy();}catch(e){} } net.mode=null; net.peer=null; net.id=null; net.conns=[]; net.inputs={}; net.lastSnap=null; net.selfSlot=0; net.waiting=false;
+  const pb=document.getElementById("play"); if(pb) pb.textContent="PLAY (vs bots)"; }   // restore the solo label (host mode relabels it to START)
 
 function hostGame(){
   if (typeof Peer==="undefined"){ setNet("multiplayer needs an internet connection (PeerJS didn't load)","warn"); return; }
   netTeardown(); net.mode="host"; net.selfSlot=0;
   setNet("connecting…");
   net.peer=new Peer(undefined,{debug:1});
-  net.peer.on("open", id=>{ net.id=id;
-    setNet("You're the HOST. Share this code: <code>"+id+"</code><br>Set your look, then hit PLAY — friends can join before or during."); });
+  net.peer.on("open", id=>{ net.id=id; netCount(); });                 // show the lobby roster (starts "nobody yet")
+  const pb=document.getElementById("play"); if(pb) pb.textContent="▶ START GAME";   // in host mode PLAY = start when ready
   net.peer.on("connection", conn=>{
     conn.on("open", ()=>{ /* wait for hello */ });
     conn.on("data", d=>{
       if (d && d.t==="hello"){ const slot=assignRemoteSlot(conn, d); conn._slot=slot;
         conn.send({t:"welcome", slot, ok: slot>=0, map:currentMapId});
-        if (slot<0){ try{conn.close();}catch(e){} } else netCount(); }
+        if (slot<0){ try{conn.close();}catch(e){} }
+        else { netCount(); try{ sfx("enter"); }catch(e){} } }   // live cue: roster updates + a soft chime
       else if (d && d.t==="input" && conn._slot>=0){ net.inputs[conn._slot]=d.in; }
       else if (d && d.t==="wins" && conn._slot>=0 && players[conn._slot]){ players[conn._slot].wins=d.n|0; }  // client won -> everyone sees the star
     });
@@ -1475,7 +1477,19 @@ function reassignRemotes(){ if (net.mode!=="host") return;
 }
 function freeRemoteSlot(conn){ const p=players.find(p=>p.conn===conn); if(p){ p.remote=false; p.conn=null; p.name="Bot "+(players.indexOf(p)+1); }
   net.conns=net.conns.filter(c=>c!==conn); delete net.inputs[conn._slot]; netCount(); }
-function netCount(){ if(net.mode==="host" && !started) setNet("You're the HOST. Code: <code>"+net.id+"</code> · "+net.conns.length+" joined<br>Hit PLAY to start (friends can also join mid-match)."); }
+// Host lobby readout: live roster of who's joined (by name) + the humans/bots split, so you can wait
+// for everyone before starting. Called on every join/leave and once the room code is ready.
+function netCount(){
+  if(net.mode!=="host" || started) return;
+  const names = net.conns.map(c => ((c._hello && c._hello.name) || "Player"));
+  const humans = names.length + 1;                               // +1 = you, the host
+  const bots = Math.max(0, CFG.players - humans);
+  const roster = names.length ? "<b class='ok'>"+names.join(", ")+"</b>" : "<span style='opacity:.65'>nobody yet</span>";
+  setNet("You're the HOST — share code <code>"+net.id+"</code>"
+    + "<br>Joined: "+roster
+    + "<br>"+humans+(humans===1?" player":" players")+" + "+bots+(bots===1?" bot":" bots")
+    + " · press <b>▶ START</b> when everyone's in (friends can also join mid-match).");
+}
 
 function joinGame(){
   if (typeof Peer==="undefined"){ setNet("multiplayer needs an internet connection (PeerJS didn't load)","warn"); return; }
