@@ -284,8 +284,20 @@ const MAP_ARENA = {
 // four doored entries) instead of a room; sparse ASYMMETRIC mid cover (open, fast lanes — no outer
 // gates); and each corner is an enclosed 2-DOOR LOOP-ROOM (dart in one door, circle the pillar, out
 // the other, or slam a door behind you). Reads and plays nothing like the Arena.
-const FOUNDRY_CORNER_W = [ H(100,100,220), V(100,100,220), V(304,100,90), H(100,304,90), P(190,190,40) ];
-const FOUNDRY_CORNER_D = [ {x:304,y:190,w:16,h:130}, {x:190,y:304,w:130,h:16} ];   // two inner-facing pallets
+// authored for the TOP-LEFT room: doors sit on DIFFERENT sides — one on the OUTER wall (opens to the
+// perimeter lane) and one on the INNER wall (opens to the arena) — so the room is a pass-through you
+// loop around the pillar, not a pocket with both doors on the same face. Reflection keeps this in all 4.
+const FOUNDRY_CORNER_W = [
+  V(100,100,220),                 // left wall — solid (backs the border)
+  H(100,304,220),                 // bottom wall — solid (inner face)
+  H(100,100,70), H(250,100,70),   // top wall, split for a door -> OUTER perimeter lane
+  V(304,100,70), V(304,250,70),   // right wall, split for a door -> INNER arena
+  P(190,190,40),                  // center pillar to circle
+];
+const FOUNDRY_CORNER_D = [
+  {x:170,y:100,w:80,h:16},        // TOP door  — opens to the outer perimeter lane
+  {x:304,y:170,w:16,h:80},        // RIGHT door — opens to the arena/center
+];
 const MAP_FOUNDRY = {
   name: "Foundry", theme: "foundry",
   walls: [
