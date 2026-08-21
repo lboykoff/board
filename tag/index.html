@@ -95,6 +95,7 @@
     <div class="row"><span class="lbl">Class</span><div class="classes" id="classes"></div></div>
     <div class="row clsrow"><span class="lbl"></span><div id="classInfo" class="clsinfo"></div></div>
     <div class="row"><span class="lbl">Color</span><div class="swatches" id="swatches"></div></div>
+    <div class="row"><span class="lbl">Map</span><div class="classes" id="maps"></div></div>
     <button id="play">PLAY (vs bots)</button>
     <div class="mprow">
       <button id="hostBtn" class="mpbtn">Host online game</button>
@@ -165,6 +166,8 @@ const CFG = {
   // in the hitter's direction of travel (ahead of them) so a clean check pops the puck for you to grab.
   // A brief immunity after a hit stops it re-triggering every frame / chaining through a crowd.
   stealDist: 30, stealPop: 46, stealMinSpeed: 70, stealImmune: 0.55,
+  stealCd: 1.6,      // per-hitter cooldown after knocking a core loose — stops the instant back-and-forth ping-pong
+  grabGrace: 0.9,    // fresh grab can't be stolen for this long (you just picked it up — a beat to actually move)
 
   // doors — runners open/close them freely to juke (DBD-pallet-style). IT can't toggle:
   // IT must BREAK a closed door (a channel that stops it), which is what buys the runner distance.
@@ -207,56 +210,155 @@ const CFG = {
 let VIEW_W = 960, VIEW_H = 600;   // = canvas pixel size; recomputed to fill the window on resize
 const WORLD_W = 1600, WORLD_H = 1120;
 
-// Level built for juking: a central room with a door on every side (the hot loop),
-// vertical flanking barriers with doors, corner cover, and free-standing juke pillars.
-const walls = [
-  // border
+// ------------------------------------------------------------
+// MAPS — the host picks one on the start screen. Both share the same WORLD_W/H so the camera,
+// fog, nav-grid dims, and spawn logic are identical; only the wall + door layout differs.
+// Each map is { name, walls:[...], doors:[...] }. Doors are solid when closed (block move + sight),
+// a gap when open; toggle with the door key nearby. The border is baked into each map's walls.
+// ------------------------------------------------------------
+const BORDER = [
   {x:0,y:0,w:WORLD_W,h:16},{x:0,y:WORLD_H-16,w:WORLD_W,h:16},
   {x:0,y:0,w:16,h:WORLD_H},{x:WORLD_W-16,y:0,w:16,h:WORLD_H},
-  // central room shell — doors (below) fill the gaps on each side
-  {x:600,y:420,w:168,h:16},{x:832,y:420,w:168,h:16},   // top edge (gap x768..832)
-  {x:600,y:684,w:168,h:16},{x:832,y:684,w:168,h:16},   // bottom edge
-  {x:600,y:420,w:16,h:108},{x:600,y:592,w:16,h:108},   // left edge (gap y528..592)
-  {x:984,y:420,w:16,h:108},{x:984,y:592,w:16,h:108},   // right edge
-  {x:770,y:540,w:60,h:40},                              // inner pillar (360 juke)
-  // vertical flanking barriers, door in the middle third
-  {x:452,y:300,w:16,h:120},{x:452,y:540,w:16,h:160},
-  {x:1132,y:300,w:16,h:120},{x:1132,y:540,w:16,h:160},
-  // corner L-cover
-  {x:200,y:220,w:180,h:16},{x:200,y:220,w:16,h:150},
-  {x:1220,y:220,w:180,h:16},{x:1404,y:220,w:16,h:150},
-  {x:200,y:750,w:16,h:150},{x:200,y:884,w:180,h:16},
-  {x:1404,y:750,w:16,h:150},{x:1220,y:884,w:180,h:16},
-  // corner PALLET LOOPS — each is an L (horizontal wall + a slammable door, below) you can
-  // circle and drop on IT. Edge play, so the whole map loops, not just the center room.
-  {x:250,y:430,w:150,h:16},  {x:1200,y:430,w:150,h:16},   // top-left / top-right hook tops
-  {x:250,y:674,w:150,h:16},  {x:1200,y:674,w:150,h:16},   // bottom-left / bottom-right hook bottoms
-  // free-standing juke pillars (spread wide, not just mid)
-  {x:360,y:540,w:48,h:48},{x:1192,y:540,w:48,h:48},
-  {x:790,y:236,w:48,h:48},{x:790,y:836,w:48,h:48},
-  {x:560,y:180,w:46,h:46},{x:994,y:180,w:46,h:46},
-  {x:560,y:894,w:46,h:46},{x:994,y:894,w:46,h:46},
-  {x:180,y:470,w:46,h:46},{x:1374,y:470,w:46,h:46},
-  {x:180,y:604,w:46,h:46},{x:1374,y:604,w:46,h:46},
-  // mid-lane breakers
-  {x:520,y:824,w:180,h:16},{x:900,y:280,w:180,h:16},
 ];
-// Doors: solid when closed (block movement + sight), a gap when open. Toggle with E nearby.
-const doorDefs = [
-  {x:768,y:420,w:64,h:16},    // central room — top
-  {x:768,y:684,w:64,h:16},    // central room — bottom
-  {x:600,y:528,w:16,h:64},    // central room — left
-  {x:984,y:528,w:16,h:64},    // central room — right
-  {x:452,y:420,w:16,h:120},   // left flank
-  {x:1132,y:420,w:16,h:120},  // right flank
-  {x:384,y:446,w:16,h:80},    // TL corner-loop pallet
-  {x:1200,y:446,w:16,h:80},   // TR corner-loop pallet
-  {x:384,y:590,w:16,h:80},    // BL corner-loop pallet
-  {x:1200,y:590,w:16,h:80},   // BR corner-loop pallet
+// tiny builders — H=horizontal bar, V=vertical bar, P=square pillar (top-left origin)
+function H(x,y,w){ return {x,y,w,h:16}; }
+function V(x,y,h){ return {x,y,w:16,h}; }
+function P(x,y,s){ return {x,y,w:s,h:s}; }
+// reflect a rect authored for the TOP-LEFT corner into any corner (mx=mirror x, my=mirror y). Shape
+// is preserved exactly, so a corner "jungle gym" authored once appears identical-but-mirrored in all 4.
+function refl(r,mx,my){ return { x: mx?WORLD_W-r.x-r.w:r.x, y: my?WORLD_H-r.y-r.h:r.y, w:r.w, h:r.h }; }
+function fourCorners(base){ const out=[];
+  for (const [mx,my] of [[false,false],[true,false],[false,true],[true,true]])
+    for (const r of base) out.push(refl(r,mx,my));
+  return out; }
+
+// MAP 1 — "ARENA": a central room with a door on every side (the hot loop), vertical flanking
+// barriers, mid pillars, OUTSKIRT gates on the outer ring, and an open "jungle-gym" LOOP in every
+// corner (an L wall + an offset pillar + a slam-door) you can circle to bait IT and drop a door on it.
+const ARENA_CORNER_W = [ H(150,210,120), V(150,210,190), P(250,300,56) ];   // open L + inner pillar
+const ARENA_CORNER_D = [ {x:270,y:210,w:70,h:16} ];                          // slam-door in the L's far arm
+const MAP_ARENA = {
+  name: "Arena",
+  walls: [
+    ...BORDER,
+    // central room shell — doors fill the gaps on each side
+    {x:600,y:420,w:168,h:16},{x:832,y:420,w:168,h:16},   // top edge (gap x768..832)
+    {x:600,y:684,w:168,h:16},{x:832,y:684,w:168,h:16},   // bottom edge
+    {x:600,y:420,w:16,h:108},{x:600,y:592,w:16,h:108},   // left edge (gap y528..592)
+    {x:984,y:420,w:16,h:108},{x:984,y:592,w:16,h:108},   // right edge
+    {x:770,y:540,w:60,h:40},                              // inner pillar (360 juke)
+    // vertical flanking barriers, door in the middle third
+    {x:452,y:300,w:16,h:120},{x:452,y:540,w:16,h:160},
+    {x:1132,y:300,w:16,h:120},{x:1132,y:540,w:16,h:160},
+    // free-standing juke pillars (spread wide)
+    {x:360,y:540,w:48,h:48},{x:1192,y:540,w:48,h:48},
+    {x:790,y:236,w:48,h:48},{x:790,y:836,w:48,h:48},
+    {x:560,y:180,w:46,h:46},{x:994,y:180,w:46,h:46},
+    {x:560,y:894,w:46,h:46},{x:994,y:894,w:46,h:46},
+    // mid-lane breakers
+    {x:520,y:824,w:180,h:16},{x:900,y:280,w:180,h:16},
+    // OUTSKIRT GATES — slam-doors on the outer runways so the perimeter loops too, not just the center
+    {x:768,y:16,w:16,h:72},{x:768,y:160,w:16,h:50},        // top runway gate (door y88..160)
+    {x:768,y:910,w:16,h:50},{x:768,y:1032,w:16,h:72},      // bottom runway gate (door y960..1032)
+    {x:16,y:560,w:60,h:16},{x:160,y:560,w:50,h:16},        // left runway gate (door x76..148)
+    {x:1390,y:560,w:72,h:16},{x:1534,y:560,w:50,h:16},     // right runway gate (door x1462..1534)
+    ...fourCorners(ARENA_CORNER_W),                        // the four jungle-gym loops
+  ],
+  doors: [
+    {x:768,y:420,w:64,h:16},    // central room — top
+    {x:768,y:684,w:64,h:16},    // central room — bottom
+    {x:600,y:528,w:16,h:64},    // central room — left
+    {x:984,y:528,w:16,h:64},    // central room — right
+    {x:452,y:420,w:16,h:120},   // left flank
+    {x:1132,y:420,w:16,h:120},  // right flank
+    {x:768,y:88,w:16,h:72},     // top outskirt gate
+    {x:768,y:960,w:16,h:72},    // bottom outskirt gate
+    {x:76,y:560,w:72,h:16},     // left outskirt gate
+    {x:1462,y:560,w:72,h:16},   // right outskirt gate
+    ...fourCorners(ARENA_CORNER_D),   // one slam-door per corner loop
+  ],
+};
+// MAP 2 — "FOUNDRY": a totally different topology. A big central RING plaza (loop the core block,
+// four doored entries) instead of a room; sparse ASYMMETRIC mid cover (open, fast lanes — no outer
+// gates); and each corner is an enclosed 2-DOOR LOOP-ROOM (dart in one door, circle the pillar, out
+// the other, or slam a door behind you). Reads and plays nothing like the Arena.
+const FOUNDRY_CORNER_W = [ H(100,100,220), V(100,100,220), V(304,100,90), H(100,304,90), P(190,190,40) ];
+const FOUNDRY_CORNER_D = [ {x:304,y:190,w:16,h:130}, {x:190,y:304,w:130,h:16} ];   // two inner-facing pallets
+const MAP_FOUNDRY = {
+  name: "Foundry",
+  walls: [
+    ...BORDER,
+    // central RING plaza — an outer shell (doored on all 4 sides) around a solid core block you circle
+    {x:630,y:390,w:110,h:16},{x:860,y:390,w:110,h:16},   // ring top (gap x740..860)
+    {x:630,y:714,w:110,h:16},{x:860,y:714,w:110,h:16},   // ring bottom
+    {x:630,y:390,w:16,h:110},{x:630,y:620,w:16,h:110},   // ring left (gap y500..620)
+    {x:954,y:390,w:16,h:110},{x:954,y:620,w:16,h:110},   // ring right
+    {x:740,y:500,w:120,h:120},                           // the core block (loop around it)
+    // sparse ASYMMETRIC mid cover — deliberately not mirrored, so the map has a flow/handedness
+    {x:390,y:540,w:130,h:16},{x:1080,y:470,w:16,h:140},
+    {x:410,y:300,w:50,h:50},{x:1140,y:760,w:50,h:50},
+    {x:800,y:190,w:46,h:46},{x:800,y:900,w:46,h:46},
+    {x:300,y:560,w:46,h:46},{x:1300,y:560,w:46,h:46},
+    {x:560,y:820,w:46,h:46},{x:1040,y:250,w:46,h:46},
+    ...fourCorners(FOUNDRY_CORNER_W),                    // the four enclosed loop-rooms
+  ],
+  doors: [
+    {x:740,y:390,w:120,h:16},   // ring — top entry
+    {x:740,y:714,w:120,h:16},   // ring — bottom entry
+    {x:630,y:500,w:16,h:120},   // ring — left entry
+    {x:954,y:500,w:16,h:120},   // ring — right entry
+    ...fourCorners(FOUNDRY_CORNER_D),   // two slam-doors per corner room
+  ],
+};
+// MAP 3 — "SCRAMBLE": the crazy one. No rooms, no rings — a wide-open BUMPER FIELD packed with
+// pillars of every size (a symmetric scatter), a central diamond of pillars, and four isolated
+// slam-door gates on the cardinal edges. Tons of micro-cover + LOS breaks = chaotic, fast, juke-heavy.
+const SCRAMBLE_QUAD = [   // one quadrant of scattered pillars (reflected into all four)
+  P(200,170,52), P(430,190,44), P(300,360,60), P(560,300,46),
+  P(160,430,44), P(650,430,48), P(470,440,40), P(360,150,40),
 ];
+const MAP_SCRAMBLE = {
+  name: "Scramble",
+  walls: [
+    ...BORDER,
+    ...fourCorners(SCRAMBLE_QUAD),        // 32 scattered bumpers, symmetric
+    // central diamond of pillars — weave through the middle
+    {x:690,y:470,w:48,h:48},{x:862,y:470,w:48,h:48},
+    {x:690,y:602,w:48,h:48},{x:862,y:602,w:48,h:48},
+    {x:776,y:536,w:48,h:48},               // dead-center bumper
+    // axis mid-edge bumpers
+    {x:776,y:170,w:44,h:44},{x:776,y:906,w:44,h:44},
+    {x:150,y:538,w:44,h:44},{x:1406,y:538,w:44,h:44},
+    // four isolated slam-door GATES on the cardinal edges (stub + door + stub)
+    {x:690,y:250,w:70,h:16},{x:844,y:250,w:70,h:16},     // N gate (door x760..844)
+    {x:690,y:854,w:70,h:16},{x:844,y:854,w:70,h:16},     // S gate
+    {x:250,y:470,w:16,h:70},{x:250,y:624,w:16,h:70},     // W gate (door y540..624)
+    {x:1334,y:470,w:16,h:70},{x:1334,y:624,w:16,h:70},   // E gate
+  ],
+  doors: [
+    {x:760,y:250,w:84,h:16},    // N gate
+    {x:760,y:854,w:84,h:16},    // S gate
+    {x:250,y:540,w:16,h:84},    // W gate
+    {x:1334,y:540,w:16,h:84},   // E gate
+  ],
+};
+const MAPS = { arena: MAP_ARENA, foundry: MAP_FOUNDRY, scramble: MAP_SCRAMBLE };
+const MAP_IDS = ["arena","foundry","scramble"];
+let currentMapId = "arena";
+let walls = MAPS[currentMapId].walls;       // active collision geometry (swapped by applyMap)
+let doorDefs = MAPS[currentMapId].doors;    // active door layout
 function makeDoors(){ return doorDefs.map(d=>({ x:d.x, y:d.y, w:d.w, h:d.h, open:false })); }
 let obstacles = walls;    // collision set: walls + closed doors + live hazards, rebuilt each frame
 let losObstacles = walls; // sight set: same, MINUS hazards flagged noLos (e.g. Bulwark's Bunker — a body-block you can see past)
+// Switch the active map: repoint walls/doors, rebuild the nav grid, and (if 3D is up) rebuild the
+// static geometry. Cheap; called from the menu picker and, on clients, when the host's map differs.
+function applyMap(id){
+  if (!MAPS[id]) return;                        // re-applying the same map is a harmless cheap rebuild
+  currentMapId=id; walls=MAPS[id].walls; doorDefs=MAPS[id].doors;
+  obstacles=walls; losObstacles=walls;
+  rebuildNav();
+  if (typeof gl!=="undefined" && gl.ok) buildStaticGL();
+}
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
@@ -308,46 +410,64 @@ function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return "rgba("+((n>>16)
 // SOUND — tiny WebAudio synth (no asset files; single-file / Drive-safe).
 // Resumed on the first user gesture (PLAY click, key, or mouse) per autoplay rules.
 // ============================================================
-let audioCtx=null, sfxOn=true, noiseBuf=null;
+let audioCtx=null, sfxOn=true, noiseBuf=null, sfxBus=null;
+// One shared SFX chain: gain -> gentle lowpass (rolls off the harsh top) -> soft compressor
+// (tames stacked/overlapping hits) -> destination. Every effect routes through this so nothing
+// is raw + clicky, and a crowd of sounds can't spike into an ear-splitting stack.
+function buildSfxBus(){
+  const g=audioCtx.createGain(); g.gain.value=0.9;
+  const lp=audioCtx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=3200; lp.Q.value=0.5;
+  const comp=audioCtx.createDynamicsCompressor();
+  comp.threshold.value=-20; comp.knee.value=26; comp.ratio.value=3.2; comp.attack.value=0.004; comp.release.value=0.18;
+  g.connect(lp).connect(comp).connect(audioCtx.destination);
+  return g;
+}
+function sfxOut(){ return sfxBus||audioCtx.destination; }
 function initAudio(){
   if (audioCtx){ if (audioCtx.state==="suspended") audioCtx.resume(); return; }
   const AC = (typeof window!=="undefined") && (window.AudioContext||window.webkitAudioContext);
   if (!AC) return;
   audioCtx = new AC();
+  sfxBus = buildSfxBus();
   const n=Math.floor(audioCtx.sampleRate*0.4); noiseBuf=audioCtx.createBuffer(1,n,audioCtx.sampleRate);
   const d=noiseBuf.getChannelData(0); for (let i=0;i<n;i++) d[i]=Math.random()*2-1;
   if (!started && musOn) startMusic("menu");   // first user gesture unlocks audio -> lobby music while the menu is up
 }
+// A soft attack + release (no instant on/off) is what removes the "click" — ramp up over ~18ms
+// and glide back down instead of snapping, so tones read as blips rather than ticks.
 function tone(freq,dur,type,vol,slideTo){
   if (!audioCtx||!sfxOn) return;
   const t=audioCtx.currentTime, o=audioCtx.createOscillator(), g=audioCtx.createGain();
   o.type=type||"sine"; o.frequency.setValueAtTime(freq,t);
   if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo),t+dur);
-  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.18,t+0.008);
-  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t+dur+0.02);
+  const peak=vol||0.18, atk=Math.min(0.018,dur*0.4);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+atk);
+  g.gain.setValueAtTime(peak,t+Math.max(atk,dur*0.5));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.03);
+  o.connect(g).connect(sfxOut()); o.start(t); o.stop(t+dur+0.06);
 }
 function noise(dur,vol,hp){
   if (!audioCtx||!sfxOn||!noiseBuf) return;
   const t=audioCtx.currentTime, s=audioCtx.createBufferSource(), g=audioCtx.createGain(), f=audioCtx.createBiquadFilter();
-  s.buffer=noiseBuf; f.type="highpass"; f.frequency.value=hp||400;
-  g.gain.setValueAtTime(vol||0.18,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  s.connect(f).connect(g).connect(audioCtx.destination); s.start(t); s.stop(t+dur);
+  s.buffer=noiseBuf; f.type="bandpass"; f.frequency.value=hp||400; f.Q.value=0.6;   // bandpass, not highpass -> less hiss
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.18,t+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f).connect(g).connect(sfxOut()); s.start(t); s.stop(t+dur);
 }
 function sfx(name){
   if (!audioCtx||!sfxOn) return;
   switch(name){
-    case "dash":      noise(0.08,0.045,1600); break;   // soft airy whoosh (you dash a lot — keep it subtle)
-    case "tag":       tone(150,0.22,"square",0.20,60); noise(0.16,0.16,300); break;
-    case "doorOpen":  tone(520,0.10,"triangle",0.10,760); break;
-    case "doorClose": tone(300,0.10,"square",0.14,140); noise(0.06,0.09,500); break;
-    case "doorBreak": noise(0.30,0.20,180); tone(90,0.32,"sawtooth",0.13,48); break;
-    case "drain":     tone(680,0.12,"sine",0.14,1020); tone(1020,0.16,"sine",0.09); break;
-    case "cull":      tone(440,0.42,"sawtooth",0.13,110); break;
-    case "showdown":  tone(300,0.5,"sawtooth",0.15,900); break;
-    case "it":        tone(660,0.16,"square",0.12,440); tone(440,0.2,"square",0.09); break;
-    case "enter":     tone(880,0.07,"sine",0.07); break;
-    case "gate":      tone(360,0.12,"triangle",0.10,240); break;
+    case "dash":      noise(0.10,0.035,900); break;    // soft airy whoosh (you dash a lot — keep it subtle)
+    case "tag":       tone(150,0.20,"triangle",0.17,70); noise(0.14,0.09,260); break;   // rounder thud, less crack
+    case "doorOpen":  tone(500,0.11,"triangle",0.08,720); break;
+    case "doorClose": tone(300,0.11,"triangle",0.10,150); noise(0.05,0.05,420); break;
+    case "doorBreak": noise(0.26,0.12,150); tone(92,0.30,"triangle",0.12,48); break;    // wooden crunch, not a buzz
+    case "drain":     tone(680,0.14,"sine",0.11,1020); tone(1020,0.16,"sine",0.06); break;
+    case "cull":      tone(300,0.44,"triangle",0.12,120); tone(150,0.44,"sine",0.07,90); break;   // soft descending, no saw buzz
+    case "showdown":  tone(280,0.5,"triangle",0.13,820); break;
+    case "it":        tone(560,0.18,"triangle",0.10,420); tone(370,0.22,"sine",0.07); break;
+    case "enter":     tone(820,0.09,"sine",0.06,940); break;
+    case "gate":      tone(360,0.13,"sine",0.08,240); break;
     case "heart":     tone(66,0.16,"sine",0.20,44); break;   // low thump — the terror-radius heartbeat
   }
 }
@@ -356,10 +476,11 @@ function heartbeat(v){
   if (!audioCtx||!sfxOn) return;
   const t0=audioCtx.currentTime;
   const thump=(at,f,vol)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.type="sine"; o.frequency.setValueAtTime(f*1.7,at); o.frequency.exponentialRampToValueAtTime(f,at+0.05);
-    g.gain.setValueAtTime(0.0001,at); g.gain.exponentialRampToValueAtTime(vol,at+0.008); g.gain.exponentialRampToValueAtTime(0.0001,at+0.19);
-    o.connect(g).connect(audioCtx.destination); o.start(at); o.stop(at+0.22); };
-  thump(t0,150,0.42*v); thump(t0+0.16,118,0.32*v);
+    o.type="sine"; o.frequency.setValueAtTime(f*1.5,at); o.frequency.exponentialRampToValueAtTime(f,at+0.07);
+    // slower attack (24ms) + longer tail = a soft "thud", not the old clicky tick
+    g.gain.setValueAtTime(0.0001,at); g.gain.exponentialRampToValueAtTime(vol,at+0.024); g.gain.exponentialRampToValueAtTime(0.0001,at+0.24);
+    o.connect(g).connect(sfxOut()); o.start(at); o.stop(at+0.28); };
+  thump(t0,148,0.34*v); thump(t0+0.17,116,0.26*v);
 }
 let heartT=0, terrorLevel=0, terrorFlash=0;
 function updateTerror(dt){                                    // heartbeat cadence + red throb quicken as IT closes
@@ -522,7 +643,7 @@ function makePlayer(x, y, human, name, color) {
     culledAt:-1, place:0, gateCdT:0, beaconCdT:0, doorCdT:0, aiTimer:0, aiWander:{x:0,y:0},
     aiTarget:null, aiAlertT:0, aiKnows:false, aiSeen:0, aiLastIt:{x:0,y:0}, aiErr:0, aiErrT:0, aiStuck:0, aiRepath:0,
     aiPath:null, aiPathI:0, aiPathGoal:null, aiPatrol:null,
-    breakDoor:null, breakT:0, doorSlowT:0,
+    breakDoor:null, breakT:0, doorSlowT:0, stealCdT:0, grabGraceT:0,
     dash:{t:0,dir:{x:0,y:0}}, dashCharges:CFG.dashCharges, dashRegenT:0, dashCdT:0, aiDashT:0,
     cls:"striker", abilCdT:0, shoveT:0, shoveAng:0, blinkT:0, aiming:false, aimAng:-Math.PI/2,
     blockCharges:CFG.blockCharges, blockRegenT:0,   // ghost (interference) temp-block charges
@@ -667,14 +788,15 @@ function steerAvoid(p, dirx, diry, probe){
 // ------------------------------------------------------------
 const NAV=32, GW=Math.ceil(WORLD_W/NAV), GH=Math.ceil(WORLD_H/NAV);
 const navBlk=new Uint8Array(GW*GH);
-(function buildNav(){
+function rebuildNav(){                       // refill the block grid from the ACTIVE walls (re-run on map change)
   const pad=CFG.radius+4;
   for (let gy=0;gy<GH;gy++) for (let gx=0;gx<GW;gx++){
     const cx=gx*NAV+NAV/2, cy=gy*NAV+NAV/2; let b=0;
     for (const w of walls){ if (cx>w.x-pad&&cx<w.x+w.w+pad&&cy>w.y-pad&&cy<w.y+w.h+pad){ b=1; break; } }
     navBlk[gy*GW+gx]=b;
   }
-})();
+}
+rebuildNav();
 function cellOpen(gx,gy){ return gx>=0&&gy>=0&&gx<GW&&gy<GH&&navBlk[gy*GW+gx]===0; }
 function nearestOpenCell(gx,gy){
   if (cellOpen(gx,gy)) return [gx,gy];
@@ -1040,15 +1162,17 @@ function useAbility(p){
 function checkSteals(){
   for (const p of players){
     if (p.isIt || p.role==="interference" || p.carrying || p.stun>0 || p.culledAt>=0) continue;
+    if (p.stealCdT>0) continue;                                // just knocked one loose — brief cooldown kills the ping-pong
     if (p.speed < CFG.stealMinSpeed) continue;                 // must actually be moving into them (a check, not a nudge)
     for (const q of players){
-      if (q===p || !q.carrying || q.isIt || q.role==="interference" || q.immunity>0) continue;
+      if (q===p || !q.carrying || q.isIt || q.role==="interference" || q.immunity>0 || q.grabGraceT>0) continue;
       if (dist(p,q) > CFG.stealDist+CFG.radius) continue;
       // pop the core out in the hitter's direction of travel (or facing if nearly still)
       const sp=Math.hypot(p.vx,p.vy)||1, dx=(sp>40?p.vx/sp:Math.cos(p.heading)), dy=(sp>40?p.vy/sp:Math.sin(p.heading));
       const cr=q.carrying; dropCore(q);
       cr.x=clamp(q.x+dx*CFG.stealPop, 30, WORLD_W-30); cr.y=clamp(q.y+dy*CFG.stealPop, 30, WORLD_H-30);
       q.immunity=Math.max(q.immunity, CFG.stealImmune);        // brief grace so it can't be re-stolen instantly
+      p.stealCdT=CFG.stealCd;                                  // the hitter must wait before knocking another loose
       spawnBurst(q.x,q.y,"#ffce6a",10,170,0.4); addShake(2);
       if (p.human||q.human||earshot(q.x,q.y)) sfx("tag");
       feed(p.name+" knocked the core loose from "+q.name);
@@ -1176,6 +1300,7 @@ function updateCores(dt){
         if (c.grabCd>0 && p===c.lastHolder) continue;
         if (dist(p,c)<CFG.radius+CFG.coreRadius){
           c.holder=p; c.lastHolder=p; p.carrying=c;               // value carries over (hot cores stay valuable)
+          p.grabGraceT=CFG.grabGrace;                            // a beat where the fresh grab can't be knocked loose
           spawnRing(c.x,c.y,"#ffe08a",30); if (p.human||earshot(c.x,c.y)) sfx("enter");
           feed(p.name+" grabbed a core"); break;
         }
@@ -1257,7 +1382,7 @@ function hostGame(){
     conn.on("open", ()=>{ /* wait for hello */ });
     conn.on("data", d=>{
       if (d && d.t==="hello"){ const slot=assignRemoteSlot(conn, d); conn._slot=slot;
-        conn.send({t:"welcome", slot, ok: slot>=0});
+        conn.send({t:"welcome", slot, ok: slot>=0, map:currentMapId});
         if (slot<0){ try{conn.close();}catch(e){} } else netCount(); }
       else if (d && d.t==="input" && conn._slot>=0){ net.inputs[conn._slot]=d.in; }
       else if (d && d.t==="wins" && conn._slot>=0 && players[conn._slot]){ players[conn._slot].wins=d.n|0; }  // client won -> everyone sees the star
@@ -1297,8 +1422,9 @@ function joinGame(){
     conn.on("data", d=>{
       if (d && d.t==="welcome"){ if(!d.ok){ setNet("game is full — ask the host for a slot","warn"); netTeardown(); return; }
         net.selfSlot=d.slot; net.waiting=true;
+        if (d.map && d.map!==currentMapId) applyMap(d.map);   // match the host's chosen map before we render
         menuEl.classList.add("hide"); started=true; last=performance.now(); initAudio(); startMusic("game"); }
-      else if (d && d.t==="snap"){ net.lastSnap=d; net.waiting=false; }
+      else if (d && d.t==="snap"){ if (d.mp && d.mp!==currentMapId) applyMap(d.mp); net.lastSnap=d; net.waiting=false; }
     });
     conn.on("close", ()=>{ setNet("disconnected from host","warn"); backToMenuFromNet(); });
     conn.on("error", ()=>{ setNet("lost connection","warn"); });
@@ -1309,7 +1435,7 @@ function backToMenuFromNet(){ started=false; net.mode=null; net.lastSnap=null; m
 
 // ---- host: pack the whole dynamic world into a compact snapshot ----
 function netSnapshot(){
-  return { t:"snap", ph:match.phase, el:match.elapsed, tt:match.t, ml:match.marksLeft, bt:match.beaconTimer, it:itIndex,
+  return { t:"snap", mp:currentMapId, ph:match.phase, el:match.elapsed, tt:match.t, ml:match.marksLeft, bt:match.beaconTimer, it:itIndex,
     ann: match.announce?{text:match.announce.text,sub:match.announce.sub,t:match.announce.t,max:match.announce.max,col:match.announce.col}:null,
     feed: match.feed.map(f=>({text:f.text,t:f.t})),
     banks: match.banks.map(b=>({x:b.x,y:b.y})),
@@ -1374,6 +1500,7 @@ function frame(now){
   if (scoring) updateCores(dt);
   for (const p of players){
     p.immunity=Math.max(0,p.immunity-dt);
+    p.stealCdT=Math.max(0,p.stealCdT-dt); p.grabGraceT=Math.max(0,p.grabGraceT-dt);
     if (p.role==="interference"){ updateInterference(p,dt); continue; }
     if (scoring && p.isIt){ p.hold+=dt; p.itMult=1+Math.min(p.hold*CFG.itEscalation,0.2);
       p.score=Math.max(0, p.score-CFG.itScoreBleed*dt); }   // IT can't earn and slowly bleeds
@@ -1735,28 +1862,34 @@ function boxMesh(w,h,d, color, emissive, emInt){
   return new THREE.Mesh(g,m);
 }
 function buildStaticGL(){
+  // rebuildable: tear down any prior static geometry (map switch) so nothing double-stacks
+  if (gl.staticGroup){
+    gl.scene.remove(gl.staticGroup);
+    gl.staticGroup.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); } });
+    gl.staticGroup=null;
+  }
+  const root=new THREE.Group();
   // floor: a big dark base plane that extends WAY past the arena (no visible void edge), which
   // receives shadows, plus a glowing tech grid over the play area to mark the arena.
   const floorMat=new THREE.MeshStandardMaterial({ color:0x0a1018, roughness:0.9, metalness:0.2 });
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), floorMat);
   floor.rotation.x=-Math.PI/2; floor.position.set(WORLD_W/2,0,WORLD_H/2); floor.receiveShadow=true;
-  gl.scene.add(floor);
+  root.add(floor);
   const cell=34, gx=Math.ceil(WORLD_W/cell), gz=Math.ceil(WORLD_H/cell);
   const gridA=new THREE.GridHelper(gx*cell, gx, 0x2ea6d8, 0x123044);
   gridA.position.set(gx*cell/2,0.6,WORLD_H/2); gridA.material.transparent=true; gridA.material.opacity=0.3;
   // GridHelper is square; scale Z to cover the arena's aspect so lines fill the play field
-  gridA.scale.z = (gz*cell)/(gx*cell); gl.scene.add(gridA);
+  gridA.scale.z = (gz*cell)/(gx*cell); root.add(gridA);
   // walls: extruded blocks with a bright cyan neon rim (edge lines) — the signature look
   const wallMat=new THREE.MeshStandardMaterial({ color:0x18222e, roughness:0.5, metalness:0.5 });
-  const grp=new THREE.Group();
   for (const w of walls){
     const mesh=new THREE.Mesh(new THREE.BoxGeometry(w.w,G.wallH,w.h), wallMat);
-    mesh.position.set(w.x+w.w/2, G.wallH/2, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; grp.add(mesh);
+    mesh.position.set(w.x+w.w/2, G.wallH/2, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
     const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),
       new THREE.LineBasicMaterial({ color:0x69e0ff, transparent:true, opacity:0.9 }));
-    edges.position.copy(mesh.position); grp.add(edges);
+    edges.position.copy(mesh.position); root.add(edges);
   }
-  gl.scene.add(grp);
+  gl.scene.add(root); gl.staticGroup=root;
 }
 function syncPool(pool, n, make){                 // grow/shrink a mesh pool to n and return active slice
   while (pool.length<n){ const o=make(); gl.scene.add(o.root||o); pool.push(o); }
@@ -2611,6 +2744,16 @@ function startMenuLoop(){ if (!_menuRAF) _menuRAF=requestAnimationFrame(menuLoop
       sw.querySelectorAll(".sw").forEach(e=>e.classList.remove("sel"));
       d.classList.add("sel"); drawPreview(); };
     sw.appendChild(d); });
+  // map picker — the host's choice; applied live so the 3D preview behind the menu shows it too
+  const mp=document.getElementById("maps");
+  if (mp){ MAP_IDS.forEach(id=>{ const b=document.createElement("div");
+    b.className="cls"+(id===currentMapId?" sel":"");
+    if (id===currentMapId) b.style.borderColor="#7fd1ff";
+    b.innerHTML="<b style='color:#cfe6ff'>"+MAPS[id].name+"</b>";
+    b.onclick=()=>{ applyMap(id);
+      mp.querySelectorAll(".cls").forEach(e=>{ e.classList.remove("sel"); e.style.borderColor=""; });
+      b.classList.add("sel"); b.style.borderColor="#7fd1ff"; };
+    mp.appendChild(b); }); }
   const nameEl=document.getElementById("pname");
   nameEl.value=custom.name;
   nameEl.addEventListener("keydown", e=>{ if(e.key==="Enter") startGame(); });
