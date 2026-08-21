@@ -149,7 +149,6 @@ const CFG = {
 
   // match flow
   grace: 3.0, cullMarks: [50, 95, 135], showdownTime: 60,
-  itScoreBleed: 3.0,      // score/sec IT loses — being IT is bad (can't earn + bleeds), floored at 0
 
   // CARRY-AND-BANK scoring: grab a loose core, run it to a bank to score. Carrying slows you and
   // lights you up; getting tagged or shoved drops it into a loose scramble. IT can't carry or bank.
@@ -1670,8 +1669,7 @@ function frame(now){
     p.immunity=Math.max(0,p.immunity-dt);
     p.stealCdT=Math.max(0,p.stealCdT-dt); p.grabGraceT=Math.max(0,p.grabGraceT-dt);
     if (p.role==="interference"){ updateInterference(p,dt); continue; }
-    if (scoring && p.isIt){ p.hold+=dt; p.itMult=1+Math.min(p.hold*CFG.itEscalation,0.2);
-      p.score=Math.max(0, p.score-CFG.itScoreBleed*dt); }   // IT can't earn and slowly bleeds
+    if (scoring && p.isIt){ p.hold+=dt; p.itMult=1+Math.min(p.hold*CFG.itEscalation,0.2); }   // IT can't earn (no carrying), but no longer bleeds score
     else p.itMult=1;
     tickAbility(p,dt);                         // cooldowns + strike/blink timers
     // INTENT: local human (index 0) types; a REMOTE player's intent arrives over the net; bots use AI.
@@ -2827,7 +2825,7 @@ function updateHudText(){
   const panel=document.getElementById("tune");
   const groups={
     "Vision / fog":["viewRadius","itViewRadius","visRays"],
-    "IT":["itMaxSpeed","itAccel","itScoreBleed"],
+    "IT":["itMaxSpeed","itAccel"],
     "Runner":["runnerMaxSpeed","runnerAccel","decel"],
     "Dash":["dashSpeed","dashTime","dashTurn","itDashTurnMult","dashRegen"],
     "Carry / bank":["coreCount","carryValue","carryGrow","carryGrowCap","carrySlow","bankRadius"],
@@ -2836,7 +2834,7 @@ function updateHudText(){
   };
   const ranges={
     viewRadius:[120,600,10], itViewRadius:[120,700,10], visRays:[40,300,10],
-    itMaxSpeed:[120,360,5], itAccel:[600,3600,50], itScoreBleed:[0,10,0.5],
+    itMaxSpeed:[120,360,5], itAccel:[600,3600,50],
     runnerMaxSpeed:[120,360,5], runnerAccel:[600,3600,50], decel:[400,3000,50],
     dashSpeed:[300,900,20], dashTime:[0.08,0.32,0.01], dashTurn:[0,26,0.5], itDashTurnMult:[0,1,0.05], dashRegen:[0.2,5,0.1],
     coreCount:[1,6,1], carryValue:[2,30,1], carryGrow:[0,20,1], carryGrowCap:[0,60,2], carrySlow:[0.5,1,0.02], bankRadius:[30,90,2],
