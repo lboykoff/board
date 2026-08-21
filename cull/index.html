@@ -3,73 +3,105 @@
 <head>
 <meta charset="utf-8" />
 <title>THE CULL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-  html, body { margin: 0; height: 100%; background: #0e1116; color: #cfe3f5;
-    font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  :root {
+    --ink: #dbe9f8; --ink-dim: #8fa3ba; --ink-faint: #5d7085;
+    --bg0: #06090f; --bg1: #0b111b; --panel: rgba(11,17,27,0.86);
+    --line: rgba(126,200,255,0.13); --line-strong: rgba(126,200,255,0.30);
+    --accent: #6ee3ff; --gold: #ffc94d; --danger: #ff5646; --good: #6fe6a6;
+    --disp: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+    --mono: ui-monospace, Menlo, Consolas, monospace;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg0); color: var(--ink);
+    font-family: var(--disp); overflow: hidden; }
   #wrap { position: fixed; inset: 0; }
   #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: #05070b; z-index: 0; }
   #c  { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: transparent; z-index: 1; }
-  #hud { position: fixed; left: 12px; bottom: 10px; right: 12px; font-size: 13px; line-height: 1.5;
-    pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
-  #hud b { color: #7fd1ff; }
-  .k { color: #ffd479; }
-  #tips { color: #8aa0b4; font-size: 12px; }
-  #tune { position: fixed; top: 10px; right: 10px; width: 250px; background: #131a24;
-    border: 1px solid #26313f; border-radius: 6px; padding: 10px; font-size: 12px; display: none; max-height: 92vh; overflow:auto; }
+  #hud { position: fixed; left: 50%; transform: translateX(-50%); bottom: 12px; max-width: 940px; width: calc(100vw - 220px);
+    font-size: 12.5px; line-height: 1.55; pointer-events: none; text-align: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9); color: var(--ink-dim); letter-spacing: .2px; }
+  #hud b { color: var(--accent); font-weight: 600; }
+  .k { color: var(--gold); font-weight: 600; }
+  #tips { color: var(--ink-faint); font-size: 11.5px; }
+  #tune { position: fixed; top: 10px; right: 10px; width: 250px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 12px; display: none; max-height: 92vh; overflow:auto; z-index: 70; }
   #tune.show { display: block; }
   #tune label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
-  #tune input[type=range] { width: 120px; }
-  #tune h4 { margin: 6px 0 2px; color: #7fd1ff; }
+  #tune input[type=range] { width: 120px; accent-color: var(--accent); }
+  #tune h4 { margin: 6px 0 2px; color: var(--accent); font-weight: 600; }
 
   /* ---- start / customize screen ---- */
-  #menu { position: fixed; inset: 0; background: radial-gradient(circle at 50% 35%, #141c28, #0a0d12 70%);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 50; }
+  #menu { position: fixed; inset: 0; z-index: 50; overflow-y: auto;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(60,140,200,0.14), transparent 60%),
+      radial-gradient(900px 500px at 85% 110%, rgba(255,86,70,0.08), transparent 55%),
+      linear-gradient(180deg, #0a1019, #06090f 65%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
   #menu.hide { display: none; }
-  #menu h1 { font-size: 40px; letter-spacing: 10px; margin: 0; color: #eaf2ff; text-shadow: 0 0 18px rgba(120,200,255,0.35); }
-  #menu .sub { color: #8aa0b4; font-size: 13px; margin-top: -8px; }
-  #menu .card { background: #131a24; border: 1px solid #26313f; border-radius: 10px; padding: 18px 22px;
-    display: flex; flex-direction: column; gap: 14px; width: 420px; max-width: 92vw; }
+  #menu .brand { text-align: center; user-select: none; }
+  #menu .kicker { font-size: 11px; letter-spacing: 6px; color: var(--ink-faint); text-transform: uppercase; margin-bottom: 2px; }
+  #menu h1 { font-size: 54px; font-weight: 700; letter-spacing: 14px; margin: 0; padding-left: 14px; /* optically recenter the tracking */
+    color: #f2f7ff; line-height: 1.05;
+    text-shadow: 0 0 26px rgba(110,227,255,0.35), 0 0 80px rgba(110,227,255,0.15); }
+  #menu h1 .x { color: var(--danger); text-shadow: 0 0 26px rgba(255,86,70,0.55); }
+  #menu .rule { width: 340px; height: 2px; margin: 8px auto 4px;
+    background: linear-gradient(90deg, transparent, var(--line-strong) 20%, var(--line-strong) 80%, transparent); }
+  #menu .sub { color: var(--ink-dim); font-size: 12.5px; letter-spacing: .4px; }
+  #menu .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 13px; width: 440px; max-width: 92vw; margin-top: 8px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04); }
   #menu .row { display: flex; align-items: center; gap: 12px; }
-  #menu .row > span.lbl { color: #7fd1ff; font-size: 12px; width: 74px; }
-  #menu #pcv { background: #0a0d12; border: 1px solid #223; border-radius: 8px; }
-  #menu input[type=text] { flex: 1; background: #0a0d12; border: 1px solid #2a3644; border-radius: 6px;
-    color: #eaf2ff; padding: 8px 10px; font-family: inherit; font-size: 14px; }
+  #menu .row > span.lbl { color: var(--ink-faint); font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; width: 68px; flex: none; }
+  #menu #pcv { background: #070b12; border: 1px solid var(--line); border-radius: 12px; }
+  #menu input[type=text] { flex: 1; background: #070b12; border: 1px solid var(--line); border-radius: 9px;
+    color: #f2f7ff; padding: 10px 12px; font-family: var(--disp); font-size: 15px; letter-spacing: .5px; outline: none; transition: border-color .15s; }
+  #menu input[type=text]:focus { border-color: var(--line-strong); }
   #menu .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
-  #menu .sw { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
-  #menu .sw.sel { border-color: #eaf2ff; box-shadow: 0 0 8px rgba(255,255,255,0.4); }
+  #menu .sw { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+    outline: 2px solid transparent; outline-offset: 2px; transition: transform .12s, outline-color .12s; }
+  #menu .sw:hover { transform: scale(1.15); }
+  #menu .sw.sel { outline-color: rgba(255,255,255,0.85); transform: scale(1.1); }
   #menu .classes { display: flex; gap: 8px; flex: 1; }
-  #menu .cls { flex: 1; background: #0a0d12; border: 1px solid #2a3644; border-radius: 8px; color: #cfe3f5;
-    padding: 8px 6px; cursor: pointer; font-family: inherit; text-align: center; line-height: 1.25; }
-  #menu .cls b { display: block; font-size: 13px; }
-  #menu .cls small { font-size: 10px; color: #8aa0b4; }
-  #menu .cls.sel { border-width: 2px; padding: 7px 5px; }
-  #menu .clsrow { margin-top: -8px; }
-  #menu .clsinfo { flex: 1; font-size: 11px; color: #9fb3c8; min-height: 14px; }
-  #menu .accs { display: flex; flex-wrap: wrap; gap: 6px; }
-  #menu .acc { background: #0a0d12; border: 1px solid #2a3644; border-radius: 6px; color: #cfe3f5;
-    padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
-  #menu .acc.sel { border-color: #7fd1ff; color: #7fd1ff; }
-  #menu #play { background: #1f6feb; border: none; border-radius: 8px; color: #fff; font-size: 16px;
-    padding: 12px; cursor: pointer; font-family: inherit; letter-spacing: 1px; }
-  #menu #play:hover { background: #2f7ffb; }
-  #menu .hint { color: #6f8398; font-size: 11px; text-align: center; }
+  #menu .cls { flex: 1; background: #070b12; border: 1px solid var(--line); border-radius: 10px; color: var(--ink);
+    padding: 9px 6px; cursor: pointer; font-family: var(--disp); text-align: center; line-height: 1.3;
+    transition: border-color .15s, background .15s, transform .12s; }
+  #menu .cls:hover { background: #0b1220; transform: translateY(-1px); }
+  #menu .cls b { display: block; font-size: 13px; font-weight: 600; letter-spacing: .5px; }
+  #menu .cls small { font-size: 9.5px; color: var(--ink-faint); letter-spacing: 1px; text-transform: uppercase; }
+  #menu .cls.sel { background: #0c1524; }
+  #menu .clsrow { margin-top: -6px; }
+  #menu .clsinfo { flex: 1; font-size: 11px; color: var(--ink-dim); min-height: 14px; line-height: 1.45; }
+  #menu #play { border: none; border-radius: 11px; color: #061018; font-size: 16px; font-weight: 700;
+    font-family: var(--disp); letter-spacing: 3px; padding: 13px; cursor: pointer; margin-top: 2px;
+    background: linear-gradient(180deg, #8deeff, #4ec3ea); box-shadow: 0 4px 24px rgba(110,227,255,0.25);
+    transition: box-shadow .15s, transform .12s, filter .15s; }
+  #menu #play:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 8px 34px rgba(110,227,255,0.4); }
+  #menu #play:active { transform: translateY(0); }
+  #menu .hint { color: var(--ink-faint); font-size: 10.5px; text-align: center; letter-spacing: .3px; line-height: 1.7; }
   /* multiplayer lobby */
   #menu .mprow { display: flex; gap: 8px; }
-  #menu .mpbtn { flex: 1; background: #10202e; border: 1px solid #2a4a63; border-radius: 8px; color: #9fd6ff;
-    font-size: 13px; padding: 9px; cursor: pointer; font-family: inherit; }
-  #menu .mpbtn:hover { background: #16324a; }
-  #menu .netbox { color: #b9d4ea; font-size: 12px; text-align: center; min-height: 0; line-height: 1.5; }
-  #menu .netbox code { color: #ffd479; font-size: 15px; letter-spacing: 1px; background: #0a0d12; padding: 2px 8px; border-radius: 5px; }
-  #menu .netbox .ok { color: #7fe6a6; } #menu .netbox .warn { color: #ffb060; }
+  #menu .mpbtn { flex: 1; background: transparent; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--accent);
+    font-size: 12.5px; font-weight: 600; letter-spacing: 1px; padding: 10px; cursor: pointer; font-family: var(--disp);
+    transition: background .15s, transform .12s; }
+  #menu .mpbtn:hover { background: rgba(110,227,255,0.08); transform: translateY(-1px); }
+  #menu .netbox { color: var(--ink-dim); font-size: 12px; text-align: center; min-height: 0; line-height: 1.6; }
+  #menu .netbox code { color: var(--gold); font-family: var(--mono); font-size: 14px; letter-spacing: 1px;
+    background: #070b12; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; user-select: all; }
+  #menu .netbox .ok { color: var(--good); } #menu .netbox .warn { color: #ffb060; }
+  #menu .netbox b.ok { font-weight: 600; }
   /* audio controls — always visible + clickable, over the menu and the game */
   #audioctl { position: fixed; left: 12px; top: 148px; z-index: 60; display: flex; align-items: center; gap: 8px;
-    background: rgba(19,26,36,0.82); border: 1px solid #26313f; border-radius: 8px; padding: 6px 10px; }
-  #audioctl #muteBtn { background: none; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 0; }
-  #audioctl #volSlider { width: 90px; cursor: pointer; accent-color: #7fd1ff; }
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+  #audioctl #muteBtn { background: none; border: none; font-size: 17px; cursor: pointer; line-height: 1; padding: 0; }
+  #audioctl #volSlider { width: 88px; cursor: pointer; accent-color: var(--accent); }
   /* FPS + quality readout — small, bottom-left, out of the HUD's way; hidden until in a match */
-  #fps { position: fixed; left: 12px; bottom: 10px; z-index: 60; display: none; font: 12px/1.2 monospace;
-    color: #7fe6a6; background: rgba(10,14,20,0.7); border: 1px solid #26313f; border-radius: 6px;
-    padding: 3px 8px; letter-spacing: .5px; cursor: pointer; user-select: none; }
+  #fps { position: fixed; left: 12px; bottom: 10px; z-index: 60; display: none;
+    font: 600 11px/1.2 var(--disp); letter-spacing: 1px;
+    color: var(--good); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 4px 9px; cursor: pointer; user-select: none; }
 </style>
 </head>
 <body>
@@ -89,9 +121,12 @@
 <div id="fps" title="Press F to change quality">–</div>
 
 <div id="menu">
-  <h1>THE CULL</h1>
-  <div class="sub">grab cores · bank them for points · don't get tagged holding one · most points wins</div>
-  <div class="sub" style="color:#8aa0b4">steal by running INTO a core carrier — it knocks the core loose for you to grab. (getting tagged, or a Striker's shove, drops it too.) win a match to earn a ⭐ on your model.</div>
+  <div class="brand">
+    <div class="kicker">last one standing scores</div>
+    <h1>THE <span class="x">CULL</span></h1>
+    <div class="rule"></div>
+    <div class="sub">bank cores for points · dodge IT · every cut drops the lowest score</div>
+  </div>
   <div class="card">
     <div class="row">
       <canvas id="pcv" width="118" height="118"></canvas>
@@ -100,14 +135,14 @@
     <div class="row"><span class="lbl">Class</span><div class="classes" id="classes"></div></div>
     <div class="row clsrow"><span class="lbl"></span><div id="classInfo" class="clsinfo"></div></div>
     <div class="row"><span class="lbl">Color</span><div class="swatches" id="swatches"></div></div>
-    <div class="row"><span class="lbl">Map</span><div class="classes" id="maps"></div></div>
+    <div class="row"><span class="lbl">Arena</span><div class="classes" id="maps"></div></div>
     <button id="play">PLAY (vs bots)</button>
     <div class="mprow">
-      <button id="hostBtn" class="mpbtn">Host online game</button>
-      <button id="joinBtn" class="mpbtn">Join with code</button>
+      <button id="hostBtn" class="mpbtn">HOST ONLINE</button>
+      <button id="joinBtn" class="mpbtn">JOIN WITH CODE</button>
     </div>
     <div id="netbox" class="netbox"></div>
-    <div class="hint">WASD move · Space dash · R-click your class ability · L-click doors · <b style="color:#ffd479">run into a core carrier to knock it loose</b> · M/N audio · R restart · T tuning</div>
+    <div class="hint"><span class="k">WASD</span> move · <span class="k">Space</span> dash · <span class="k">R-click</span> ability · <span class="k">L-click</span> doors · run into a carrier to knock its core loose</div>
   </div>
 </div>
 
@@ -369,24 +404,30 @@ const MAP_SCRAMBLE = {
 const THEMES = {
   // ARENA — cold cyan neon "grid" arena (the clean, competitive look)
   grid: {
+    ui:"#6ee3ff", beam:0x9fe0ff,
     bg:0x05070b, fog:0x05070b, fogNear:520, fogFar:1500,
-    floor:0x0a1018, grid1:0x2ea6d8, grid2:0x123044, gridCell:34, gridOp:0.30,
+    floor:0x0a1018, seam:0x2ea6d8, plateJitter:0.030, tile:96,
     wall:0x18222e, wallEmis:0x0a1622, wallEmisInt:0.12, rim:0x69e0ff, rim2:0x69e0ff, wallH:1.0, style:"box",
     hemiSky:0x2a3d55, hemiGround:0x05070b, hemiInt:0.65, ambCol:0x223247, ambInt:0.50, sunCol:0x8fb4dd, sunInt:0.60,
+    fillCol:0x2a4a6a, fillInt:0.30,
   },
   // FOUNDRY — molten industrial: warm orange embers, tall round columns, smoky red fog
   foundry: {
+    ui:"#ffa24d", beam:0xffb060,
     bg:0x0b0503, fog:0x1a0a05, fogNear:440, fogFar:1350,
-    floor:0x140a06, grid1:0xd9631f, grid2:0x3a1c0c, gridCell:24, gridOp:0.34,
+    floor:0x140a06, seam:0xd9631f, plateJitter:0.040, tile:72,
     wall:0x2a140a, wallEmis:0x5e2207, wallEmisInt:0.55, rim:0xff8a2a, rim2:0xffc24d, wallH:1.5, style:"column",
     hemiSky:0x5a2c12, hemiGround:0x0b0503, hemiInt:0.72, ambCol:0x3c1f10, ambInt:0.55, sunCol:0xffa24d, sunInt:0.72,
+    fillCol:0x7a3a14, fillInt:0.35,
   },
   // SCRAMBLE — toxic overgrowth: acid-green + violet crystal spikes on a dark jade floor
   crystal: {
+    ui:"#6fe6a6", beam:0x8fe6b4,
     bg:0x03090a, fog:0x06150f, fogNear:560, fogFar:1650,
-    floor:0x07140d, grid1:0x35d98a, grid2:0x0c3324, gridCell:46, gridOp:0.24,
+    floor:0x07140d, seam:0x35d98a, plateJitter:0.026, tile:120,
     wall:0x112219, wallEmis:0x0e2e1c, wallEmisInt:0.55, rim:0x6cff9e, rim2:0xb070ff, wallH:1.25, style:"crystal",
     hemiSky:0x1e4a3a, hemiGround:0x03090a, hemiInt:0.70, ambCol:0x143728, ambInt:0.55, sunCol:0x8fe6b4, sunInt:0.62,
+    fillCol:0x2a5a3a, fillInt:0.32,
   },
 };
 function mapTheme(){ return THEMES[(MAPS[currentMapId]||{}).theme] || THEMES.grid; }
@@ -511,11 +552,11 @@ function drawItAlert(){
   const appear=Math.min(1,(1.8-t)*9), fade=Math.min(1,t/0.5), a=Math.max(0,Math.min(appear,fade));
   ctx.globalAlpha=a; ctx.textAlign="center";
   ctx.translate(VIEW_W/2, VIEW_H*0.40); const sc=(0.86+0.14*appear)*(1+0.04*pulse); ctx.scale(sc,sc);
-  ctx.font="bold 30px monospace"; ctx.fillStyle="#ffd0c8"; ctx.fillText("▼ ▼ ▼",0,-58);
-  ctx.font="900 76px monospace"; ctx.shadowColor="#ff2a1a"; ctx.shadowBlur=36;
+  ctx.font="700 26px "+F.d; ctx.fillStyle="#ffd0c8"; ctx.fillText("▼ ▼ ▼",0,-58);
+  ctx.font="700 72px "+F.d; ctx.shadowColor="#ff2a1a"; ctx.shadowBlur=36;
   ctx.lineWidth=4; ctx.strokeStyle="rgba(60,0,0,0.9)"; ctx.strokeText("YOU'RE IT",0,0);
   ctx.fillStyle="#ff5646"; ctx.fillText("YOU'RE IT",0,0); ctx.shadowBlur=0;
-  ctx.font="17px monospace"; ctx.fillStyle="#ffe0d8"; ctx.fillText("run them down — tag someone to pass it on",0,38);
+  ctx.font="500 16px "+F.d; ctx.fillStyle="#ffe0d8"; ctx.fillText("run them down — tag someone to pass it on",0,38);
   ctx.restore(); ctx.globalAlpha=1;
 }
 function shade(hex,f){ const n=parseInt(hex.slice(1),16), r=(n>>16)&255,g=(n>>8)&255,b=n&255;
@@ -523,6 +564,34 @@ function shade(hex,f){ const n=parseInt(hex.slice(1),16), r=(n>>16)&255,g=(n>>8)
 function tint(hex,f){ const n=parseInt(hex.slice(1),16), r=(n>>16)&255,g=(n>>8)&255,b=n&255;
   return "rgb("+Math.round(r+(255-r)*f)+","+Math.round(g+(255-g)*f)+","+Math.round(b+(255-b)*f)+")"; }
 function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")"; }
+
+// ============================================================
+// HUD KIT — one visual language for everything drawn on the 2D canvas. Glass panels, pill chips,
+// and two font stacks (display for words, mono for numbers). The accent follows the active map's
+// theme so the whole screen — world, HUD, menu chip — reads as one artifact.
+// ============================================================
+const F={ d:"'Chakra Petch','Segoe UI',sans-serif", m:"ui-monospace,Menlo,Consolas,monospace" };
+function uiC(){ return (typeof mapTheme==="function" && mapTheme().ui) || "#6ee3ff"; }
+function rr(x,y,w,h,r){ ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x,y,w,h,r);
+  else { ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); } }
+function panel(x,y,w,h,r,accent){
+  rr(x,y,w,h,r); ctx.fillStyle="rgba(9,14,22,0.84)"; ctx.fill();
+  ctx.strokeStyle=rgba(accent||uiC(),0.20); ctx.lineWidth=1; rr(x+0.5,y+0.5,w-1,h-1,r); ctx.stroke();
+  // hairline top highlight — the "glass" read
+  ctx.strokeStyle="rgba(255,255,255,0.05)"; ctx.beginPath(); ctx.moveTo(x+r,y+1.2); ctx.lineTo(x+w-r,y+1.2); ctx.stroke();
+}
+// pill chip; returns its width so rows of chips can be laid out. opts: {fg, border, fill, font, pad, h}
+function chipW(text,font,pad){ ctx.font=font; return ctx.measureText(text).width+(pad||12)*2; }
+function chip(x,y,text,o){
+  o=o||{}; const font=o.font||("600 13px "+F.d), pad=o.pad||12, h=o.h||26;
+  ctx.font=font; const w=ctx.measureText(text).width+pad*2;
+  rr(x,y,w,h,h/2); ctx.fillStyle=o.fill||"rgba(9,14,22,0.84)"; ctx.fill();
+  ctx.strokeStyle=o.border||rgba(o.fg||"#8fa3ba",0.35); ctx.lineWidth=1; rr(x+0.5,y+0.5,w-1,h-1,h/2); ctx.stroke();
+  ctx.fillStyle=o.fg||"#dbe9f8"; ctx.textAlign="left"; ctx.textBaseline="middle";
+  ctx.fillText(text,x+pad,y+h/2+0.5); ctx.textBaseline="alphabetic";
+  return w;
+}
 
 // ============================================================
 // SOUND — tiny WebAudio synth (no asset files; single-file / Drive-safe).
@@ -1716,11 +1785,18 @@ function frame(now){
 }
 // client "waiting for host" screen (shown until the first snapshot lands)
 function drawNetWaiting(){
-  ctx.clearRect(0,0,VIEW_W,VIEW_H); ctx.fillStyle="#05070b"; ctx.fillRect(0,0,VIEW_W,VIEW_H);
-  ctx.fillStyle="#7fd1ff"; ctx.textAlign="center"; ctx.font="bold 20px monospace";
-  ctx.fillText("connected — waiting for the host to start…", VIEW_W/2, VIEW_H/2);
-  ctx.fillStyle="#8aa0b4"; ctx.font="13px monospace";
-  ctx.fillText("(you'll drop straight into the match)", VIEW_W/2, VIEW_H/2+26);
+  ctx.clearRect(0,0,VIEW_W,VIEW_H);
+  const bg=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,60, VIEW_W/2,VIEW_H/2,VIEW_H*0.8);
+  bg.addColorStop(0,"#0a1019"); bg.addColorStop(1,"#05070b");
+  ctx.fillStyle=bg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  const pulse=0.5+0.5*Math.sin(performance.now()/500);
+  ctx.textAlign="center";
+  ctx.strokeStyle=rgba(uiC(),0.25+pulse*0.35); ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(VIEW_W/2,VIEW_H/2-58,20+pulse*4,0,Math.PI*2); ctx.stroke();
+  ctx.font="700 20px "+F.d; ctx.fillStyle="#f2f7ff";
+  ctx.fillText("CONNECTED", VIEW_W/2, VIEW_H/2);
+  ctx.font="500 13px "+F.d; ctx.fillStyle="rgba(143,163,186,0.9)";
+  ctx.fillText("waiting for the host to start — you'll drop straight in", VIEW_W/2, VIEW_H/2+26);
 }
 
 // ============================================================
@@ -1990,6 +2066,33 @@ function glowSprite(color, size){
     depthWrite:false, transparent:true, opacity:0.9 });
   const sp=new THREE.Sprite(m); sp.scale.set(size,size,1); return sp;
 }
+function makeBeamTexture(){                    // vertical light-shaft gradient: bright base -> nothing at the top
+  const cv=document.createElement("canvas"); cv.width=32; cv.height=128;
+  const g=cv.getContext("2d"), gr=g.createLinearGradient(0,128,0,0);
+  gr.addColorStop(0,"rgba(255,255,255,0.85)"); gr.addColorStop(0.4,"rgba(255,255,255,0.30)"); gr.addColorStop(1,"rgba(255,255,255,0)");
+  g.fillStyle=gr; g.fillRect(0,0,32,128);
+  // soften the shaft's sides so the two crossed planes blend into one volume
+  const side=g.createLinearGradient(0,0,32,0);
+  side.addColorStop(0,"rgba(0,0,0,1)"); side.addColorStop(0.25,"rgba(0,0,0,0)"); side.addColorStop(0.75,"rgba(0,0,0,0)"); side.addColorStop(1,"rgba(0,0,0,1)");
+  g.globalCompositeOperation="destination-out"; g.fillStyle=side; g.fillRect(0,0,32,128);
+  return new THREE.CanvasTexture(cv);
+}
+function lightShaft(color, w, h){              // two crossed additive planes = a cheap volumetric beam
+  if (!gl.beamTex) gl.beamTex=makeBeamTexture();
+  const root=new THREE.Group(), mats=[];
+  for (let k=0;k<2;k++){
+    const m=new THREE.MeshBasicMaterial({ map:gl.beamTex, color:color, blending:THREE.AdditiveBlending,
+      transparent:true, opacity:0.55, depthWrite:false, side:THREE.DoubleSide });
+    const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h), m);
+    p.position.y=h/2; p.rotation.y=k*Math.PI/2; root.add(p); mats.push(m);
+  }
+  root.userData.mats=mats; return root;
+}
+function shadowBlob(size){                     // soft dark contact blob — grounds a character even with shadows off
+  const m=new THREE.MeshBasicMaterial({ map:gl.glowTex, color:0x000000, transparent:true, opacity:0.42, depthWrite:false });
+  const p=new THREE.Mesh(new THREE.PlaneGeometry(size,size), m);
+  p.rotation.x=-Math.PI/2; p.position.y=0.7; return p;
+}
 function initGL(){
   if (!use3D){ return; }
   try {
@@ -2009,6 +2112,9 @@ function initGL(){
     //     re-tinted per map by applyTheme() (kept as refs), so each map has its own mood of light. ---
     gl.hemi=new THREE.HemisphereLight(0x2a3d55, 0x05070b, 0.65); gl.scene.add(gl.hemi);
     gl.amb=new THREE.AmbientLight(0x223247, 0.5); gl.scene.add(gl.amb);
+    // low fill from the opposite quarter (no shadow) — lifts silhouettes off the dark floor so
+    // characters read as lit objects instead of flat cutouts. Tinted per map by applyTheme.
+    gl.fill=new THREE.DirectionalLight(0x2a4a6a, 0.3); gl.fill.position.set(-300,700,-400); gl.scene.add(gl.fill);
     gl.sun=new THREE.DirectionalLight(0x8fb4dd, 0.6);
     gl.sun.position.set(220,1500,150); gl.sun.castShadow=true;   // steep/overhead -> short shadows contained near walls
     gl.sun.shadow.mapSize.set(1024,1024); gl.sun.shadow.camera.near=100; gl.sun.shadow.camera.far=2400;
@@ -2039,7 +2145,53 @@ function applyTheme(t){
   if (gl.hemi){ gl.hemi.color.setHex(t.hemiSky); gl.hemi.groundColor.setHex(t.hemiGround); gl.hemi.intensity=t.hemiInt; }
   if (gl.amb){ gl.amb.color.setHex(t.ambCol); gl.amb.intensity=t.ambInt; }
   if (gl.sun){ gl.sun.color.setHex(t.sunCol); gl.sun.intensity=t.sunInt; }
+  if (gl.fill){ gl.fill.color.setHex(t.fillCol||0x2a4a6a); gl.fill.intensity=t.fillInt||0.3; }
 }
+// deterministic pseudo-random (stable across frames/machines — no Math.random in world-gen)
+function hash2(x,y){ const n=Math.sin(x*127.1+y*311.7)*43758.5453; return n-Math.floor(n); }
+// Baked floor plating: industrial deck tiles with grout, per-plate tonal variation, wear speckle,
+// and the occasional seam lit in the theme accent. One 1024px canvas texture, repeated — kills the
+// "debug GridHelper" look for the cost of a single textured plane.
+function makeFloorTexture(t){
+  const S=1024, cv=document.createElement("canvas"); cv.width=cv.height=S;
+  const g=cv.getContext("2d");
+  const base="#"+("00000"+t.floor.toString(16)).slice(-6);
+  g.fillStyle=base; g.fillRect(0,0,S,S);
+  const n=8, ts=S/n;                              // 8x8 plates per texture repeat
+  for (let y=0;y<n;y++) for (let x=0;x<n;x++){
+    const j=hash2(x,y);
+    // plate face: slight tonal lift, brighter toward one corner (fake directional wear)
+    const lift=0.02+j*t.plateJitter*2;
+    const gr=g.createLinearGradient(x*ts,y*ts,(x+1)*ts,(y+1)*ts);
+    gr.addColorStop(0,"rgba(255,255,255,"+(lift*1.5).toFixed(3)+")");
+    gr.addColorStop(1,"rgba(255,255,255,"+(lift*0.4).toFixed(3)+")");
+    g.fillStyle=gr; g.fillRect(x*ts+2,y*ts+2,ts-4,ts-4);
+    // inner chamfer line
+    g.strokeStyle="rgba(0,0,0,0.35)"; g.lineWidth=1.5;
+    g.strokeRect(x*ts+5.5,y*ts+5.5,ts-11,ts-11);
+    // ~1 in 7 plates gets an accent-lit seam edge (the "powered floor" tell)
+    if (j>0.86){ g.strokeStyle=rgba2(t.seam,0.34); g.lineWidth=2.5;
+      const side=Math.floor(hash2(x+9,y+3)*4);
+      g.beginPath();
+      if (side===0){ g.moveTo(x*ts+4,y*ts+3); g.lineTo((x+1)*ts-4,y*ts+3); }
+      else if (side===1){ g.moveTo(x*ts+4,(y+1)*ts-3); g.lineTo((x+1)*ts-4,(y+1)*ts-3); }
+      else if (side===2){ g.moveTo(x*ts+3,y*ts+4); g.lineTo(x*ts+3,(y+1)*ts-4); }
+      else { g.moveTo((x+1)*ts-3,y*ts+4); g.lineTo((x+1)*ts-3,(y+1)*ts-4); }
+      g.stroke(); }
+  }
+  // grout between plates
+  g.strokeStyle="rgba(0,0,0,0.6)"; g.lineWidth=3;
+  for (let i=0;i<=n;i++){ g.beginPath(); g.moveTo(i*ts,0); g.lineTo(i*ts,S); g.stroke();
+    g.beginPath(); g.moveTo(0,i*ts); g.lineTo(S,i*ts); g.stroke(); }
+  // wear speckle
+  for (let i=0;i<2200;i++){ const rx=hash2(i,7)*S, ry=hash2(i,13)*S, d=hash2(i,29);
+    g.fillStyle = d>0.5 ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.05)";
+    g.fillRect(rx,ry,1+d*2,1+d*2); }
+  const tex=new THREE.CanvasTexture(cv);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  return tex;
+}
+function rgba2(hexNum,a){ return "rgba("+((hexNum>>16)&255)+","+((hexNum>>8)&255)+","+(hexNum&255)+","+a+")"; }
 // A chunky near-square wall is a "pillar" — the theme's wall style reshapes those (round column /
 // crystal spike). Long thin walls stay low bars regardless, so lanes/rooms read the same everywhere.
 function isPillar(w){ const mn=Math.min(w.w,w.h), mx=Math.max(w.w,w.h); return mn>=28 && mx/mn<1.7; }
@@ -2052,33 +2204,52 @@ function buildStaticGL(){
   }
   const t=mapTheme(); applyTheme(t);
   const root=new THREE.Group();
-  // floor: a big dark base plane extending past the arena (no void edge), receives shadows, plus a
-  // glowing grid over the play area. Both tinted per theme (cyan tech / orange grate / jade toxic).
-  const floorMat=new THREE.MeshStandardMaterial({ color:t.floor, roughness:0.9, metalness:0.2 });
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), floorMat);
-  floor.rotation.x=-Math.PI/2; floor.position.set(WORLD_W/2,0,WORLD_H/2); floor.receiveShadow=true;
-  root.add(floor);
-  const cell=t.gridCell, gx=Math.ceil(WORLD_W/cell), gz=Math.ceil(WORLD_H/cell);
-  const gridA=new THREE.GridHelper(gx*cell, gx, t.grid1, t.grid2);
-  gridA.position.set(gx*cell/2,0.6,WORLD_H/2); gridA.material.transparent=true; gridA.material.opacity=t.gridOp;
-  gridA.scale.z = (gz*cell)/(gx*cell); root.add(gridA);
-  // walls — one shared body material, per-style geometry, per-theme neon rim. Two rim colors alternate
-  // (e.g. green + violet crystals) for variety; long bars always take the primary rim.
+  // surrounding void: a huge dark base plane past the arena so there's never a hard edge
+  const voidMat=new THREE.MeshStandardMaterial({ color:t.bg, roughness:1.0, metalness:0.0 });
+  const voidPlane=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), voidMat);
+  voidPlane.rotation.x=-Math.PI/2; voidPlane.position.set(WORLD_W/2,-0.5,WORLD_H/2); voidPlane.receiveShadow=true;
+  root.add(voidPlane);
+  // arena deck: the baked plating texture (see makeFloorTexture) — plates, grout, accent seams
+  const ftex=makeFloorTexture(t);
+  const texSpan=t.tile*8;                                      // world px covered by one texture repeat
+  ftex.repeat.set(WORLD_W/texSpan, WORLD_H/texSpan);
+  const deckMat=new THREE.MeshStandardMaterial({ map:ftex, color:0xaeb6c2, roughness:0.9, metalness:0.2 });
+  const deck=new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W,WORLD_H), deckMat);
+  deck.rotation.x=-Math.PI/2; deck.position.set(WORLD_W/2,0,WORLD_H/2); deck.receiveShadow=true;
+  root.add(deck);
+  // walls — shared body material; the SHAPE and the light treatment carry each theme's identity:
+  //   box walls   -> slab + a recessed emissive TRIM STRIP along the top rim (architectural, not wireframe)
+  //   columns     -> molten cylinder + a glowing top ring
+  //   crystals    -> faceted cone + edge glints (the one style where wireframe reads as facets)
   const wh=G.wallH*(t.wallH||1);
-  const wallMat=new THREE.MeshStandardMaterial({ color:t.wall, emissive:t.wallEmis||0x000000, emissiveIntensity:t.wallEmisInt||0, roughness:0.5, metalness:0.5 });
+  const wallMat=new THREE.MeshStandardMaterial({ color:t.wall, emissive:t.wallEmis||0x000000, emissiveIntensity:t.wallEmisInt||0, roughness:0.55, metalness:0.45 });
+  const wallMatB=wallMat.clone(); wallMatB.color.multiplyScalar(1.22);          // subtle tonal alternation
+  const trimMat=new THREE.MeshStandardMaterial({ color:t.rim, emissive:t.rim, emissiveIntensity:1.15, roughness:0.35, metalness:0.2 });
+  const trimMatB=(t.rim2&&t.rim2!==t.rim)?trimMat.clone():trimMat; if (trimMatB!==trimMat){ trimMatB.color.setHex(t.rim2); trimMatB.emissive.setHex(t.rim2); }
   let i=0;
   for (const w of walls){
-    const pil=isPillar(w), r=Math.min(w.w,w.h)/2;
-    let geo, cy;
-    if (pil && t.style==="column"){ geo=new THREE.CylinderGeometry(r,r*1.06,wh*1.35,14); cy=wh*1.35/2; }        // round molten column
-    else if (pil && t.style==="crystal"){ geo=new THREE.ConeGeometry(r*1.12,wh*2.0,6); cy=wh*2.0/2; }            // jagged crystal spike
-    else { geo=new THREE.BoxGeometry(w.w,wh,w.h); cy=wh/2; }                                                     // default slab / long bar
-    const mesh=new THREE.Mesh(geo, wallMat);
-    mesh.position.set(w.x+w.w/2, cy, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
-    const rimCol = (pil && t.rim2 && (i%2)) ? t.rim2 : t.rim;
-    const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),
-      new THREE.LineBasicMaterial({ color:rimCol, transparent:true, opacity:0.9 }));
-    edges.position.copy(mesh.position); root.add(edges);
+    const pil=isPillar(w), r=Math.min(w.w,w.h)/2, alt=hash2(w.x,w.y)>0.5;
+    const bodyM=alt?wallMatB:wallMat, trimM=(pil&&i%2)?trimMatB:trimMat;
+    if (pil && t.style==="column"){
+      const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r,r*1.08,wh*1.35,14), bodyM);
+      mesh.position.set(w.x+w.w/2, wh*1.35/2, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(r*0.92,1.6,8,22), trimM);
+      ring.rotation.x=Math.PI/2; ring.position.set(w.x+w.w/2, wh*1.35-2, w.y+w.h/2); root.add(ring);
+    } else if (pil && t.style==="crystal"){
+      const geo=new THREE.ConeGeometry(r*1.12,wh*2.0,6);
+      const mesh=new THREE.Mesh(geo, bodyM);
+      mesh.position.set(w.x+w.w/2, wh, w.y+w.h/2); mesh.rotation.y=hash2(w.y,w.x)*Math.PI;   // varied facing
+      mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+      const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color:(i%2&&t.rim2)?t.rim2:t.rim, transparent:true, opacity:0.75 }));
+      edges.position.copy(mesh.position); edges.rotation.copy(mesh.rotation); root.add(edges);
+    } else {
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(w.w,wh,w.h), bodyM);
+      mesh.position.set(w.x+w.w/2, wh/2, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+      // recessed light strip along the top face — the neon reads as built-in fixture lighting
+      const trim=new THREE.Mesh(new THREE.BoxGeometry(Math.max(4,w.w-6),1.8,Math.max(4,w.h-6)), trimM);
+      trim.position.set(w.x+w.w/2, wh+0.9, w.y+w.h/2); root.add(trim);
+    }
     i++;
   }
   gl.scene.add(root); gl.staticGroup=root;
@@ -2181,6 +2352,7 @@ function makePlayerMesh(){
   const rigs={ striker:buildStrikerRig(), bulwark:buildBulwarkRig(), warden:buildWardenRig() };
   for (const k in rigs){ rigs[k].group.visible=false; root.add(rigs[k].group); }
   const glow=glowSprite(0xffffff, 58); glow.position.y=17; root.add(glow);
+  root.add(shadowBlob(52));                    // contact shadow (independent of the shadow-map quality tier)
   return { root, rigs, glow, cls:null };
 }
 function renderWorld3D(){
@@ -2228,22 +2400,33 @@ function renderWorld3D(){
     const full=c.value>=CFG.carryGrowCap-0.01;
     o.orb.material.emissiveIntensity=full?2.4:1.6; o.glow.scale.setScalar(full?96:74);
   });
-  // --- banks (glowing floor rings) ---
+  // --- banks: glowing pad + a volumetric light shaft rising off it (visible across the arena,
+  //     brightens + widens when YOU are carrying and close — "bring it here") ---
   const banks=match.banks||[];
+  const bt=mapTheme();
   syncPool(gl.pool.banks, banks.length, ()=>{
     const root=new THREE.Group();
     const ring=new THREE.Mesh(new THREE.TorusGeometry(CFG.bankRadius,3.5,10,48),
       new THREE.MeshStandardMaterial({ color:0x8fe0ff, emissive:0x3aa6d8, emissiveIntensity:1.4, roughness:0.3 }));
     ring.rotation.x=-Math.PI/2; ring.position.y=2; root.add(ring);
+    const ring2=new THREE.Mesh(new THREE.TorusGeometry(CFG.bankRadius*0.62,1.6,8,40),
+      new THREE.MeshStandardMaterial({ color:0xcfeeff, emissive:0x6ec8ee, emissiveIntensity:1.0, roughness:0.3 }));
+    ring2.rotation.x=-Math.PI/2; ring2.position.y=1.6; root.add(ring2);
     const disc=new THREE.Mesh(new THREE.CircleGeometry(CFG.bankRadius,40),
       new THREE.MeshBasicMaterial({ color:0x1a4a66, transparent:true, opacity:0.28 }));
     disc.rotation.x=-Math.PI/2; disc.position.y=1; root.add(disc);
-    const beam=glowSprite(0x9fe0ff,90); beam.position.y=40; root.add(beam);
-    return { root, ring, beam };
+    const shaft=lightShaft(0x9fe0ff, CFG.bankRadius*1.3, 210); root.add(shaft);
+    const glow=glowSprite(0x9fe0ff,80); glow.position.y=10; root.add(glow);
+    return { root, ring, ring2, disc, shaft, glow };
   });
   banks.forEach((b,i)=>{ const o=gl.pool.banks[i]; o.root.position.set(b.x,0,b.y);
     const hot=you.carrying && dist(you,b)<CFG.bankRadius+90;
-    o.ring.material.emissiveIntensity=hot?2.6:1.3; o.beam.material.opacity=hot?0.9:0.4; });
+    const pulse=0.5+0.5*Math.sin(performance.now()/380+i*2);
+    o.ring.material.color.setHex(hot?0xcfeeff:0x8fe0ff);
+    o.ring.material.emissive.setHex(bt.beam); o.ring.material.emissiveIntensity=hot?2.6:1.1+pulse*0.4;
+    o.ring2.rotation.z += 0.004;                              // slow counter-rotating inner ring
+    o.shaft.userData.mats.forEach(m=>{ m.color.setHex(bt.beam); m.opacity=hot?0.85:0.30+pulse*0.10; });
+    o.glow.material.color.setHex(bt.beam); o.glow.material.opacity=hot?0.8:0.35; });
   // --- doors: closed = amber slab; open = you must STILL see the doorway. So every door keeps a
   // glowing floor threshold plate + two jamb posts, always visible (green when open / passable,
   // amber when a closed slab is blocking it). No more invisible open doors. ---
@@ -2366,8 +2549,10 @@ function drawPlayerLabels3D(){
       // GHOST: keep the player's NAME above them (so you can still tell who the ghost is), then the
       // block charges + recharge timer under it — shown to itself AND everyone (ghosts meddle in the open).
       const ns=project3(p.x,p.y,G.bodyH+18);
-      ctx.fillStyle=p.human?"#eaffff":"rgba(201,184,224,0.92)";   // ghost-violet name tint
-      ctx.font=p.human?"bold 12px monospace":"11px monospace"; ctx.fillText(p.name.slice(0,10),ns.x,ns.y-6);
+      ctx.fillStyle=p.human?"#f2f7ff":"rgba(201,184,224,0.92)";   // ghost-violet name tint
+      ctx.font=(p.human?"600":"500")+" 12px "+F.d;
+      ctx.shadowColor="rgba(0,0,0,0.9)"; ctx.shadowBlur=4;
+      ctx.fillText(p.name.slice(0,10),ns.x,ns.y-6); ctx.shadowBlur=0;
       const g=project3(p.x,p.y,G.bodyH+2), full=p.blockCharges>=CFG.blockCharges;
       const label="BLOCK "+"■".repeat(p.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-p.blockCharges));
       ctx.font="bold 10px monospace";
@@ -2395,10 +2580,12 @@ function drawPlayerLabels3D(){
       ctx.fillText(CLS_LETTER[p.cls]||"?",g.x,g.y); ctx.textBaseline="alphabetic";
       if (p.human && p.abilCdT>0){ ctx.fillStyle=c.accent; ctx.font="10px monospace"; ctx.fillText(p.abilCdT.toFixed(1)+"s",g.x,g.y-ry-6); }
     }
-    if (p.stun>0){ ctx.fillStyle="#ffe27a"; ctx.font="14px monospace"; ctx.fillText("★",s.x,s.y-26); }
-    if (p.rank){ ctx.fillStyle=rankColor(p.rank); ctx.font="bold 13px monospace"; ctx.fillText(ordinal(p.rank),s.x,s.y-13); }
-    ctx.fillStyle=p.human?"#eaffff":(p.isIt?"rgba(255,150,150,0.9)":"rgba(200,220,240,0.85)");
-    ctx.font=p.human?"bold 12px monospace":"11px monospace"; ctx.fillText(p.name.slice(0,10),s.x,s.y);
+    if (p.stun>0){ ctx.fillStyle="#ffe27a"; ctx.font="14px "+F.m; ctx.fillText("★",s.x,s.y-26); }
+    if (p.rank){ ctx.fillStyle=rankColor(p.rank); ctx.font="700 11px "+F.d; ctx.fillText(ordinal(p.rank),s.x,s.y-13); }
+    ctx.fillStyle=p.human?"#f2f7ff":(p.isIt?"rgba(255,150,150,0.92)":"rgba(200,220,240,0.88)");
+    ctx.font=(p.human?"600":"500")+" 12px "+F.d;
+    ctx.shadowColor="rgba(0,0,0,0.9)"; ctx.shadowBlur=4;
+    ctx.fillText(p.name.slice(0,10),s.x,s.y); ctx.shadowBlur=0;
     if (p.wins>0){ const wy=s.y-31;    // gold WIN STAR with the count inside — a persistent brag
       ctx.font="26px monospace"; ctx.fillStyle="#ffcf3a"; ctx.shadowColor="rgba(255,190,40,0.9)"; ctx.shadowBlur=8;
       ctx.fillText("★",s.x,wy); ctx.shadowBlur=0;
@@ -2676,22 +2863,26 @@ function render2D(){
 }
 
 function drawMinimap(){
-  const mmW=170, s=mmW/WORLD_W, mmH=WORLD_H*s, ox=14, oy=14;
-  ctx.fillStyle="rgba(8,11,16,0.82)"; ctx.fillRect(ox-4,oy-4,mmW+8,mmH+8);
-  ctx.fillStyle="#26313f";
+  const mmW=170, s=mmW/WORLD_W, mmH=WORLD_H*s, ox=18, oy=18;
+  panel(ox-6,oy-6,mmW+12,mmH+12,10);
+  ctx.save(); rr(ox-2,oy-2,mmW+4,mmH+4,6); ctx.clip();
+  ctx.fillStyle=rgba(uiC(),0.35);
   for (const w of walls) ctx.fillRect(ox+w.x*s, oy+w.y*s, Math.max(1,w.w*s), Math.max(1,w.h*s));
-  for (const d of (match.doors||[])){ ctx.fillStyle=d.open?"#3a5a3a":"#7a5a38";  // doors: green open, brown closed
+  for (const d of (match.doors||[])){ ctx.fillStyle=d.open?"rgba(111,230,166,0.75)":"rgba(255,178,96,0.85)";
     ctx.fillRect(ox+d.x*s, oy+d.y*s, Math.max(1.5,d.w*s), Math.max(1.5,d.h*s)); }
-  ctx.strokeStyle="rgba(120,160,210,0.5)"; ctx.lineWidth=1; ctx.strokeRect(ox+cam.x*s,oy+cam.y*s,VIEW_W*s,VIEW_H*s);
-  for (const b of (match.banks||[])){   // banks (blue rings) always on the map
+  ctx.strokeStyle="rgba(219,233,248,0.28)"; ctx.lineWidth=1; ctx.strokeRect(ox+cam.x*s,oy+cam.y*s,VIEW_W*s,VIEW_H*s);
+  for (const b of (match.banks||[])){   // banks — accent rings, always shown
     ctx.strokeStyle="#8fe0ff"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ox+b.x*s,oy+b.y*s,4,0,Math.PI*2); ctx.stroke(); }
   for (const c of (match.cores||[])){ if (!c.live||c.holder) continue;   // loose cores (amber dots)
     ctx.fillStyle="#ffd678"; ctx.beginPath(); ctx.arc(ox+c.x*s,oy+c.y*s,2.5,0,Math.PI*2); ctx.fill(); }
   const you=players[0];
   ctx.fillStyle=you.isIt?"#ff5a5a":(you.role==="interference"?"#a98bff":"#63e6ff");
   ctx.beginPath(); ctx.arc(ox+you.x*s,oy+you.y*s,3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle="rgba(255,255,255,0.5)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(ox+you.x*s,oy+you.y*s,4.5,0,Math.PI*2); ctx.stroke();
   if (match.beaconTimer>0 && itIndex>=0){ const it=players[itIndex];
-    ctx.fillStyle="#78dcff"; ctx.beginPath(); ctx.arc(ox+it.x*s,oy+it.y*s,3,0,Math.PI*2); ctx.fill(); }
+    ctx.fillStyle="#ff5646"; ctx.beginPath(); ctx.arc(ox+it.x*s,oy+it.y*s,3,0,Math.PI*2); ctx.fill(); }
+  ctx.restore();
 }
 // Standings — top-right, the glance target. Ranked, your row highlit, a CULL LINE above the
 // lowest active player (when a cut is pending), and gap-to-1st / cull-margin so you instantly
@@ -2703,78 +2894,120 @@ function drawScoreboard(){
   const active=list.filter(p=>p.role!=="interference");
   const cutPending = match.phase==="live" && active.length>3;   // is a cull still coming?
   const cullTarget = cutPending ? active[active.length-1] : null;  // lowest active = next cut
-  const rowH=27, W=250, x=VIEW_W-W-10, y=12, headH=30;
-  const bodyH=list.length*rowH+14, sumH=cutPending?38:0;
-  ctx.fillStyle="rgba(14,19,27,0.9)"; ctx.fillRect(x,y,W,headH+bodyH+sumH);
-  ctx.fillStyle="#7fd1ff"; ctx.font="bold 16px monospace"; ctx.textAlign="left"; ctx.fillText("STANDINGS",x+14,y+21);
-  ctx.textAlign="right"; ctx.fillStyle="#8aa0b4"; ctx.font="11px monospace"; ctx.fillText("pts",x+W-14,y+21);
-  let ry=y+headH;
+  const topScore=Math.max(1,...list.map(p=>p.score));
+  const rowH=30, W=256, x=VIEW_W-W-12, y=12, headH=34;
+  const bodyH=list.length*rowH+10, sumH=cutPending?34:0;
+  panel(x,y,W,headH+bodyH+sumH,12);
+  // header
+  ctx.font="700 13px "+F.d; ctx.textAlign="left"; ctx.fillStyle=uiC();
+  ctx.fillText("STANDINGS",x+14,y+22);
+  ctx.strokeStyle=rgba(uiC(),0.25); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x+12,y+headH-4); ctx.lineTo(x+W-12,y+headH-4); ctx.stroke();
+  let ry=y+headH+2;
   list.forEach((p,i)=>{
-    if (p===cullTarget){ ctx.strokeStyle="rgba(255,90,90,0.7)"; ctx.lineWidth=1; ctx.setLineDash([5,4]);
-      ctx.beginPath(); ctx.moveTo(x+6,ry-1); ctx.lineTo(x+W-6,ry-1); ctx.stroke(); ctx.setLineDash([]); }
-    if (p.human){ ctx.fillStyle="rgba(120,200,255,0.16)"; ctx.fillRect(x+2,ry,W-4,rowH); }   // highlight YOU
-    const tag=p.role==="interference"?"OUT":p.isIt?"IT":"";
-    ctx.textAlign="left"; ctx.font=p.human?"bold 16px monospace":"15px monospace";
-    ctx.fillStyle=p.isIt?"#ff7a7a":p.role==="interference"?"#8a7bb0":(p.human?"#eaffff":"#cfe3f5");
-    const nameStr=(i+1)+". "+p.name.slice(0,10);
-    ctx.fillText(nameStr,x+14,ry+19);
-    if (tag){ const nw=ctx.measureText(nameStr).width; ctx.font="10px monospace";
-      ctx.fillStyle=p.isIt?"#ff9a9a":"#9a8ac0"; ctx.fillText(tag,x+20+nw,ry+18); }
-    ctx.textAlign="right"; ctx.font=p.human?"bold 17px monospace":"15px monospace"; ctx.fillStyle=p.human?"#ffe6a3":"#d9c07e";
-    ctx.fillText(Math.round(p.score),x+W-14,ry+19);
+    if (p===cullTarget){ ctx.strokeStyle="rgba(255,86,70,0.6)"; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(x+8,ry-1); ctx.lineTo(x+W-8,ry-1); ctx.stroke(); ctx.setLineDash([]); }
+    if (p.human){ ctx.fillStyle=rgba(uiC(),0.09); rr(x+5,ry,W-10,rowH-2,7); ctx.fill(); }
+    const out=p.role==="interference";
+    // rank tile
+    const rc = i===0?"#ffc94d":i===1?"#c8d4e2":i===2?"#c9915e":"#5d7085";
+    ctx.font="700 12px "+F.d; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillStyle=out?"rgba(93,112,133,0.5)":rc; ctx.fillText(String(i+1), x+22, ry+rowH/2);
+    // name
+    ctx.textAlign="left"; ctx.font=(p.human?"600":"500")+" 13.5px "+F.d;
+    ctx.fillStyle = out?"rgba(138,123,176,0.8)" : p.isIt?"#ff8a7a" : p.human?"#f2f7ff":"#c4d2e2";
+    const nm=p.name.slice(0,11)+(p.human?"":""); ctx.fillText(nm, x+38, ry+rowH/2);
+    // badge
+    const badge = out?"OUT" : p.isIt?"IT" : "";
+    if (badge){ const bw=ctx.measureText(nm).width;
+      ctx.font="700 8.5px "+F.d;
+      const bx=x+42+bw, bcol=out?"#a98bff":"#ff5646";
+      ctx.fillStyle=rgba(bcol,0.16); rr(bx,ry+rowH/2-7,ctx.measureText(badge).width+10,14,7); ctx.fill();
+      ctx.fillStyle=bcol; ctx.textAlign="left"; ctx.fillText(badge,bx+5,ry+rowH/2+0.5); }
+    // score + relative bar
+    ctx.textAlign="right"; ctx.font="700 14px "+F.m;
+    ctx.fillStyle=out?"rgba(217,192,126,0.45)":(p.human?"#ffe6a3":"#d9c07e");
+    ctx.fillText(String(Math.round(p.score)), x+W-14, ry+rowH/2);
+    if (!out){ const frac=p.score/topScore;
+      ctx.fillStyle=rgba(p.isIt?"#ff5646":uiC(), 0.30);
+      ctx.fillRect(x+38, ry+rowH-6, (W-58)*frac, 2); }
+    ctx.textBaseline="alphabetic";
     ry+=rowH;
   });
   // gap summary — only meaningful while you're still in and cuts loom
   if (cutPending && you.role!=="interference"){
-    ry+=8; ctx.font="bold 13px monospace"; ctx.textAlign="left";
-    const lead=active[0];
+    ctx.font="600 11.5px "+F.d; ctx.textAlign="left"; ctx.textBaseline="middle";
+    const lead=active[0], sy=ry+12;
     const toFirst=you===lead?0:Math.round(lead.score-you.score);
-    ctx.fillStyle="#ffd479"; ctx.fillText(you===lead?"★ 1st place":("to 1st: +"+toFirst),x+14,ry+10);
+    ctx.fillStyle="#ffc94d"; ctx.fillText(you===lead?"★ leading":("to 1st  +"+toFirst), x+14, sy);
     ctx.textAlign="right";
-    if (you===cullTarget){ ctx.fillStyle="#ff7a7a"; ctx.fillText("ON THE CHOP!",x+W-14,ry+10); }
-    else { const margin=Math.round(you.score-cullTarget.score); ctx.fillStyle=margin<15?"#ffb060":"#8fdc9f";
-      ctx.fillText("cull margin: "+margin,x+W-14,ry+10); }
+    if (you===cullTarget){ ctx.fillStyle="#ff5646"; ctx.fillText("ON THE CHOP", x+W-14, sy); }
+    else { const margin=Math.round(you.score-cullTarget.score); ctx.fillStyle=margin<15?"#ffb060":"#6fe6a6";
+      ctx.fillText("margin  "+margin, x+W-14, sy); }
+    ctx.textBaseline="alphabetic";
   }
-  scoreboardBottom=y+headH+bodyH+sumH+6;
+  scoreboardBottom=y+headH+bodyH+sumH+8;
 }
-// events feed now lives UNDER the scoreboard (top-right), so the important reads are all up top
+// events feed — quiet, right-aligned under the scoreboard
 function drawFeed(){
-  ctx.textAlign="right"; ctx.font="11px monospace"; const x=VIEW_W-14;
+  ctx.textAlign="right"; ctx.font="500 11px "+F.d; const x=VIEW_W-16;
   match.feed.forEach((f,i)=>{ f.t-=1/60;
-    ctx.fillStyle="rgba(190,210,230,"+clamp(f.t/2,0,0.85)+")"; ctx.fillText(f.text, x, scoreboardBottom+16+i*16); });
+    ctx.fillStyle="rgba(164,186,208,"+clamp(f.t/2,0,0.8)+")"; ctx.fillText(f.text, x, scoreboardBottom+14+i*16); });
   match.feed=match.feed.filter(f=>f.t>0);
 }
 function drawBanner(){
-  ctx.textAlign="center"; ctx.font="bold 15px monospace"; let msg="";
-  if (match.phase==="grace") msg="GET READY — "+Math.ceil(match.t);
-  else if (match.phase==="live"){ const next=match.marksLeft.length?Math.ceil(match.marksLeft[0]-match.elapsed):null;
-    msg=next!=null?("CUT in "+next+"s — lowest score out  ("+activePlayers().length+" left)"):(activePlayers().length+" left"); }
-  else if (match.phase==="showdown") msg="SHOWDOWN — "+Math.ceil(match.t)+"s  (bank cores!)";
-  if (msg){ ctx.fillStyle="rgba(19,26,36,0.8)"; ctx.fillRect(VIEW_W/2-130,8,260,24);
-    ctx.fillStyle="#ffd479"; ctx.fillText(msg,VIEW_W/2,25); }
+  let label="", num="", danger=false;
+  if (match.phase==="grace"){ label="GET READY"; num=Math.ceil(match.t)+""; }
+  else if (match.phase==="live"){
+    const next=match.marksLeft.length?Math.ceil(match.marksLeft[0]-match.elapsed):null;
+    if (next!=null){ label="NEXT CULL"; num=next+"s"; danger=next<=8; }
+    else { label="SURVIVORS"; num=activePlayers().length+""; }
+  }
+  else if (match.phase==="showdown"){ label="SHOWDOWN"; num=Math.ceil(match.t)+"s"; danger=match.t<=10; }
+  if (!label) return;
+  const acc=danger?"#ff5646":uiC();
+  ctx.font="600 12px "+F.d; const lw=ctx.measureText(label).width;
+  ctx.font="700 20px "+F.d; const nw=ctx.measureText(num).width;
+  const W=lw+nw+46, H=34, x=VIEW_W/2-W/2, y=10;
+  panel(x,y,W,H,10,acc);
+  ctx.textBaseline="middle";
+  ctx.font="600 12px "+F.d; ctx.textAlign="left"; ctx.fillStyle="rgba(219,233,248,0.6)";
+  ctx.fillText(label, x+16, y+H/2+1);
+  ctx.font="700 20px "+F.d; ctx.textAlign="right"; ctx.fillStyle=acc;
+  if (danger){ ctx.shadowColor=acc; ctx.shadowBlur=12; }
+  ctx.fillText(num, x+W-14, y+H/2+1); ctx.shadowBlur=0;
+  ctx.textBaseline="alphabetic";
+  // sub-line: what the timer means (small, under the pill, only when a cut looms)
+  if (match.phase==="live" && match.marksLeft.length){
+    ctx.font="500 10.5px "+F.d; ctx.textAlign="center"; ctx.fillStyle="rgba(143,163,186,0.75)";
+    ctx.fillText("lowest score is out · "+activePlayers().length+" remain", VIEW_W/2, y+H+14);
+  }
 }
-// your live combat state, top-center under the banner (moved off the bottom so it's where your eyes are)
+// your live combat state — a row of pill chips top-center under the banner
 function drawSelfStatus(){
   const you=players[0]; if (!you) return;
-  const y=62; ctx.textAlign="left"; ctx.font="bold 18px monospace";
+  const y=64;
   const chips=[];
-  if (you.isIt) chips.push({t:"YOU ARE IT",c:"#ff7a7a"});
-  else if (you.role==="interference"){ chips.push({t:"OUT — GHOST",c:"#a98bff"});
-    chips.push({t:"BLOCK "+"■".repeat(you.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-you.blockCharges)), c:"#c9b8ff"});
+  if (you.isIt) chips.push({t:"YOU ARE IT",fg:"#ff8a7a",border:"rgba(255,86,70,0.55)",fill:"rgba(60,12,8,0.85)"});
+  else if (you.role==="interference"){
+    chips.push({t:"GHOST",fg:"#c9b8ff",border:"rgba(169,139,255,0.5)"});
+    chips.push({t:"BLOCK "+"■".repeat(you.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-you.blockCharges)),fg:"#c9b8ff"});
   }
   if (you.role!=="interference"){
-    chips.push({t:"DASH "+"●".repeat(you.dashCharges)+"○".repeat(Math.max(0,CFG.dashCharges-you.dashCharges)), c:"#7fe0ff"});
+    chips.push({t:"DASH "+"●".repeat(you.dashCharges)+"○".repeat(Math.max(0,CFG.dashCharges-you.dashCharges)),fg:"#7fe0ff"});
     const c=clsById(you.cls), ready=you.abilCdT<=0&&!you.isIt;
-    chips.push({t:c.abil+(you.isIt?" (IT)":ready?" READY":" "+you.abilCdT.toFixed(1)+"s"), c:ready?c.accent:"#5c6c7c"});
+    chips.push({t:c.abil.toUpperCase()+(you.isIt?"":ready?" ✓":" "+you.abilCdT.toFixed(1)+"s"),
+      fg:ready?c.accent:"#5c6c7c", border:ready?rgba(c.accent,0.55):undefined});
   }
   if (you.carrying){ const full=you.carrying.value>=CFG.carryGrowCap-0.01, amt=Math.round(CFG.carryValue+you.carrying.value);
-    chips.push({t:full?("CORE FULL +"+amt+" — BANK IT!"):("CARRYING +"+amt), c:full?"#fff2a0":"#ffd678"}); }
-  if (you.stun>0) chips.push({t:"STUNNED",c:"#ffe27a"});
+    chips.push({t:full?("CORE FULL +"+amt+" — BANK IT"):("CARRYING +"+amt),
+      fg:full?"#fff2a0":"#ffd678", border:full?"rgba(255,220,120,0.7)":undefined, fill:full?"rgba(60,44,8,0.85)":undefined}); }
+  if (you.stun>0) chips.push({t:"STUNNED",fg:"#ffe27a",border:"rgba(255,226,122,0.6)"});
   if (!chips.length) return;
-  const gap=24; let total=0; for (const ch of chips) total+=ctx.measureText(ch.t).width+gap; total-=gap;
+  const gap=8; let total=0;
+  for (const ch of chips) total+=chipW(ch.t,"600 13px "+F.d)+gap; total-=gap;
   let sx=VIEW_W/2-total/2;
-  ctx.fillStyle="rgba(12,17,24,0.8)"; ctx.fillRect(sx-16,y-20,total+32,30);
-  for (const ch of chips){ ctx.fillStyle=ch.c; ctx.fillText(ch.t,sx,y); sx+=ctx.measureText(ch.t).width+gap; }
+  for (const ch of chips){ sx+=chip(sx,y,ch.t,ch)+gap; }
 }
 // big center-screen announcement for culls + showdown: scales in, holds, fades
 function drawAnnounce(){
@@ -2785,24 +3018,55 @@ function drawAnnounce(){
   const alpha=Math.max(0,Math.min(appear,fade)), scale=0.78+0.22*appear;
   ctx.save(); ctx.textAlign="center"; ctx.globalAlpha=alpha;
   ctx.translate(VIEW_W/2, VIEW_H*0.30); ctx.scale(scale,scale);
-  ctx.font="bold 42px monospace"; const w=Math.max(ctx.measureText(a.text).width, a.sub?ctx.measureText(a.sub).width*1.6:0);
-  ctx.fillStyle="rgba(8,11,16,0.62)"; ctx.fillRect(-w/2-30,-42,w+60,a.sub?92:64);
-  ctx.shadowColor=a.col; ctx.shadowBlur=26; ctx.fillStyle=a.col; ctx.fillText(a.text,0,4); ctx.shadowBlur=0;
-  if (a.sub){ ctx.font="15px monospace"; ctx.fillStyle="#cfe3f5"; ctx.fillText(a.sub,0,34); }
+  ctx.font="700 40px "+F.d; const w=Math.max(ctx.measureText(a.text).width, a.sub?ctx.measureText(a.sub).width*1.4:0);
+  // soft dark bed + accent rules instead of a hard grey box
+  const bed=ctx.createLinearGradient(-w/2-90,0,w/2+90,0);
+  bed.addColorStop(0,"rgba(6,9,15,0)"); bed.addColorStop(0.18,"rgba(6,9,15,0.78)"); bed.addColorStop(0.82,"rgba(6,9,15,0.78)"); bed.addColorStop(1,"rgba(6,9,15,0)");
+  ctx.fillStyle=bed; ctx.fillRect(-w/2-90,-44,w+180,a.sub?96:70);
+  const rule=ctx.createLinearGradient(-w/2-60,0,w/2+60,0);
+  rule.addColorStop(0,"rgba(255,255,255,0)"); rule.addColorStop(0.5,rgba(a.col,0.8)); rule.addColorStop(1,"rgba(255,255,255,0)");
+  ctx.fillStyle=rule; ctx.fillRect(-w/2-60,-40,w+120,1.5); ctx.fillRect(-w/2-60,a.sub?46:22,w+120,1.5);
+  ctx.shadowColor=a.col; ctx.shadowBlur=26; ctx.fillStyle=a.col; ctx.fillText(a.text,0,8); ctx.shadowBlur=0;
+  if (a.sub){ ctx.font="500 14px "+F.d; ctx.fillStyle="#c4d2e2"; ctx.fillText(a.sub,0,34); }
   ctx.restore(); ctx.globalAlpha=1;
 }
 function drawResults(){
   if (!match.results){ return; }   // guard: phase can flip to "over" a frame before results land (e.g. a client's snapshot)
-  ctx.fillStyle="rgba(8,11,16,0.88)"; ctx.fillRect(0,0,VIEW_W,VIEW_H);
-  ctx.textAlign="center"; ctx.fillStyle="#7fd1ff"; ctx.font="bold 26px monospace"; ctx.fillText("RESULTS",VIEW_W/2,118);
-  ctx.font="12px monospace"; ctx.fillStyle="#8aa0b4"; ctx.fillText("finalists up top · winner took the Showdown",VIEW_W/2,138);
-  ctx.font="16px monospace";
-  match.results.forEach((p,i)=>{ const y=176+i*30;
-    ctx.fillStyle=p.place===1?"#ffd479":p.human?"#eaffff":"#9fb4c8";
-    const out=p.role==="interference"?" (culled)":"";
-    ctx.fillText("#"+p.place+"   "+p.name+(p.human?" (you)":"")+out+"   "+Math.round(p.score)+" pts",VIEW_W/2,y); });
-  ctx.fillStyle="#8aa0b4"; ctx.font="13px monospace";
-  ctx.fillText("Press R to play again  ·  C to change your look",VIEW_W/2,176+match.results.length*30+28);
+  // graded backdrop
+  const bg=ctx.createRadialGradient(VIEW_W/2,VIEW_H*0.4,120, VIEW_W/2,VIEW_H*0.4,VIEW_H*0.9);
+  bg.addColorStop(0,"rgba(8,12,19,0.86)"); bg.addColorStop(1,"rgba(4,6,10,0.96)");
+  ctx.fillStyle=bg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  const cx=VIEW_W/2, top=VIEW_H*0.5-((match.results.length*44+150)/2);
+  ctx.textAlign="center";
+  ctx.font="600 11px "+F.d; ctx.fillStyle="rgba(143,163,186,0.7)";
+  ctx.fillText("M A T C H   O V E R", cx, top);
+  ctx.font="700 34px "+F.d; ctx.fillStyle="#f2f7ff";
+  ctx.shadowColor=uiC(); ctx.shadowBlur=22; ctx.fillText("RESULTS", cx, top+38); ctx.shadowBlur=0;
+  const rule=ctx.createLinearGradient(cx-180,0,cx+180,0);
+  rule.addColorStop(0,"rgba(255,255,255,0)"); rule.addColorStop(0.5,rgba(uiC(),0.7)); rule.addColorStop(1,"rgba(255,255,255,0)");
+  ctx.fillStyle=rule; ctx.fillRect(cx-180,top+52,360,1.5);
+  // rows
+  const W=380, rh=38;
+  match.results.forEach((p,i)=>{ const ry=top+72+i*44;
+    const win=p.place===1;
+    panel(cx-W/2,ry,W,rh,10, win?"#ffc94d":undefined);
+    if (win){ ctx.fillStyle="rgba(255,201,77,0.07)"; rr(cx-W/2,ry,W,rh,10); ctx.fill(); }
+    ctx.textBaseline="middle";
+    ctx.font="700 15px "+F.d; ctx.textAlign="left";
+    ctx.fillStyle=win?"#ffc94d":p.place===2?"#c8d4e2":p.place===3?"#c9915e":"#5d7085";
+    ctx.fillText(win?"★ 1":"#"+p.place, cx-W/2+16, ry+rh/2+1);
+    ctx.font=(p.human?"600":"500")+" 15px "+F.d;
+    ctx.fillStyle=p.human?"#f2f7ff":"#c4d2e2";
+    ctx.fillText(p.name+(p.human?"  (you)":""), cx-W/2+62, ry+rh/2+1);
+    if (p.role==="interference"){ ctx.font="600 9px "+F.d; ctx.fillStyle="#a98bff";
+      ctx.fillText("CULLED", cx-W/2+62+ctx.measureText(p.name).width+64, ry+rh/2+1); }
+    ctx.font="700 16px "+F.m; ctx.textAlign="right"; ctx.fillStyle=win?"#ffe6a3":"#d9c07e";
+    ctx.fillText(Math.round(p.score), cx+W/2-16, ry+rh/2+1);
+    ctx.textBaseline="alphabetic";
+  });
+  const fy=top+72+match.results.length*44+18;
+  ctx.font="500 12.5px "+F.d; ctx.textAlign="center"; ctx.fillStyle="rgba(143,163,186,0.85)";
+  ctx.fillText("R  play again      C  change loadout", cx, fy);
 }
 function updateHudText(){
   const you=players[0]; let role;
@@ -2941,15 +3205,23 @@ function startMenuLoop(){ if (!_menuRAF) _menuRAF=requestAnimationFrame(menuLoop
       sw.querySelectorAll(".sw").forEach(e=>e.classList.remove("sel"));
       d.classList.add("sel"); drawPreview(); };
     sw.appendChild(d); });
-  // map picker — the host's choice; applied live so the 3D preview behind the menu shows it too
+  // map picker — theme-tinted chips (each shows its arena's palette + a one-word read of its character);
+  // the pick applies live so the 3D preview behind the menu switches too
+  const MAP_TAGS={ arena:"neon grid", foundry:"molten ring", scramble:"crystal field" };
   const mp=document.getElementById("maps");
-  if (mp){ MAP_IDS.forEach(id=>{ const b=document.createElement("div");
+  const paintMapChip=(b,id,sel)=>{ const t=THEMES[MAPS[id].theme]||THEMES.grid;
+    b.style.borderColor = sel ? t.ui : "";
+    b.style.background = sel
+      ? "linear-gradient(180deg,"+rgba(t.ui,0.14)+", #070b12)"
+      : "";
+  };
+  if (mp){ MAP_IDS.forEach(id=>{ const b=document.createElement("div"); const t=THEMES[MAPS[id].theme]||THEMES.grid;
     b.className="cls"+(id===currentMapId?" sel":"");
-    if (id===currentMapId) b.style.borderColor="#7fd1ff";
-    b.innerHTML="<b style='color:#cfe6ff'>"+MAPS[id].name+"</b>";
+    b.innerHTML="<b style='color:"+t.ui+"'>"+MAPS[id].name+"</b><small>"+(MAP_TAGS[id]||"")+"</small>";
+    paintMapChip(b,id,id===currentMapId);
     b.onclick=()=>{ applyMap(id);
-      mp.querySelectorAll(".cls").forEach(e=>{ e.classList.remove("sel"); e.style.borderColor=""; });
-      b.classList.add("sel"); b.style.borderColor="#7fd1ff"; };
+      mp.querySelectorAll(".cls").forEach((e,i)=>{ e.classList.remove("sel"); paintMapChip(e,MAP_IDS[i],false); });
+      b.classList.add("sel"); paintMapChip(b,id,true); };
     mp.appendChild(b); }); }
   const nameEl=document.getElementById("pname");
   nameEl.value=custom.name;
