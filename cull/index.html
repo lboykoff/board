@@ -20,7 +20,7 @@
   #wrap { position: fixed; inset: 0; }
   #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: #05070b; z-index: 0; }
   #c  { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: transparent; z-index: 1; }
-  #hud { position: fixed; left: 50%; transform: translateX(-50%); bottom: 12px; max-width: 940px; width: calc(100vw - 220px);
+  #hud { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; max-width: 940px; width: calc(100vw - 220px);
     font-size: 12.5px; line-height: 1.55; pointer-events: none; text-align: center;
     text-shadow: 0 1px 3px rgba(0,0,0,0.9); color: var(--ink-dim); letter-spacing: .2px; }
   #hud b { color: var(--accent); font-weight: 600; }
@@ -410,6 +410,7 @@ const THEMES = {
     wall:0x18222e, wallEmis:0x0a1622, wallEmisInt:0.12, rim:0x69e0ff, rim2:0x69e0ff, wallH:1.0, style:"box",
     hemiSky:0x2a3d55, hemiGround:0x05070b, hemiInt:0.65, ambCol:0x223247, ambInt:0.50, sunCol:0x8fb4dd, sunInt:0.60,
     fillCol:0x2a4a6a, fillInt:0.30,
+    grade:{ tint:[0.96,1.02,1.08], lift:[0.004,0.007,0.012], sat:1.06, bloom:0.85 },   // cool cyan push
   },
   // FOUNDRY — molten industrial: warm orange embers, tall round columns, smoky red fog
   foundry: {
@@ -419,6 +420,7 @@ const THEMES = {
     wall:0x2a140a, wallEmis:0x5e2207, wallEmisInt:0.55, rim:0xff8a2a, rim2:0xffc24d, wallH:1.5, style:"column",
     hemiSky:0x5a2c12, hemiGround:0x0b0503, hemiInt:0.72, ambCol:0x3c1f10, ambInt:0.55, sunCol:0xffa24d, sunInt:0.72,
     fillCol:0x7a3a14, fillInt:0.35,
+    grade:{ tint:[1.10,0.98,0.90], lift:[0.014,0.006,0.003], sat:1.10, bloom:1.05 },   // warm ember crush
   },
   // SCRAMBLE — toxic overgrowth: acid-green + violet crystal spikes on a dark jade floor
   crystal: {
@@ -428,6 +430,7 @@ const THEMES = {
     wall:0x112219, wallEmis:0x0e2e1c, wallEmisInt:0.55, rim:0x6cff9e, rim2:0xb070ff, wallH:1.25, style:"crystal",
     hemiSky:0x1e4a3a, hemiGround:0x03090a, hemiInt:0.70, ambCol:0x143728, ambInt:0.55, sunCol:0x8fe6b4, sunInt:0.62,
     fillCol:0x2a5a3a, fillInt:0.32,
+    grade:{ tint:[0.94,1.06,0.98], lift:[0.004,0.010,0.007], sat:1.12, bloom:1.0 },    // acid jade wash
   },
 };
 function mapTheme(){ return THEMES[(MAPS[currentMapId]||{}).theme] || THEMES.grid; }
@@ -467,7 +470,8 @@ function resizeCanvas(){
   canvas.width = VIEW_W; canvas.height = VIEW_H;
   if (typeof gl!=="undefined" && gl.ok){ const sc=gl.renderScale||1;   // keep the active quality's internal resolution on resize
     gl.renderer.setSize(Math.round(VIEW_W*sc),Math.round(VIEW_H*sc),false);
-    gl.camera.aspect=VIEW_W/VIEW_H; gl.camera.updateProjectionMatrix(); }
+    gl.camera.aspect=VIEW_W/VIEW_H; gl.camera.updateProjectionMatrix();
+    if (typeof postResize==="function") postResize(); }
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
@@ -518,6 +522,7 @@ function applyQuality(){
   const scale = qLevel===2?1.0 : qLevel===1?0.82 : 0.6;   // internal render resolution (upscaled by CSS)
   gl.renderScale=scale;
   gl.renderer.setSize(Math.round(VIEW_W*scale), Math.round(VIEW_H*scale), false);
+  postResize();                                           // post targets track the internal resolution
   if (gl.sun){                                            // shadows: HIGH 1024, MED 512, LOW off (biggest cost when players cluster)
     if (qLevel===0){ gl.sun.castShadow=false; }
     else { gl.sun.castShadow=true; const sz=qLevel===2?1024:512;
@@ -2123,9 +2128,11 @@ function initGL(){
     gl.playerLight=new THREE.PointLight(0xcfe6ff, 1.6, 760, 2.0);   // no shadow (point-light shadows are the #1 cost)
     gl.scene.add(gl.playerLight);
     gl.itLight=new THREE.PointLight(0xff4030, 0.0, 520, 2.0); gl.scene.add(gl.itLight);
+    gl.envMap=makeEnvMap();                                // neutral reflection cube — speculars come alive on metals
     buildStaticGL();
     gl.pool={ players:[], cores:[], banks:[], doors:[], cages:[], ghosts:[], blocks:[] };
     gl.renderScale=1; gl.ok=true;
+    initPost();                                            // HDR-ish post chain: bloom -> filmic tonemap -> grade
     applyQuality();                                        // establish the current quality tier's resolution + shadows
     glc.style.display = use3D ? "block" : "none";
   } catch(e){ gl.ok=false; use3D=false; console.warn("[3D] init failed, using 2D", e); }
@@ -2135,6 +2142,107 @@ function boxMesh(w,h,d, color, emissive, emInt){
   const m=new THREE.MeshStandardMaterial({ color:color, emissive:emissive||0x000000, emissiveIntensity:emInt||0,
     roughness:0.55, metalness:0.35 });
   return new THREE.Mesh(g,m);
+}
+
+// ============================================================
+// POST-PROCESSING — the generational-leap pass. The scene renders into an offscreen target, then a
+// custom chain composites it to screen: threshold bright-pass -> separable gaussian blur (quarter-res,
+// two iterations) -> ACES filmic tonemap + per-map color grade + saturation + vignette + a whisper of
+// chromatic aberration at the edges. No EffectComposer dependency — three raw fullscreen passes.
+// Quality gating: HIGH = bloom + grade · MED = grade only · LOW = direct render (pipeline bypassed).
+// ============================================================
+const POST_VERT="varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }";
+const POST_BRIGHT=`varying vec2 vUv; uniform sampler2D tScene; uniform float uThresh;
+  void main(){ vec3 c=texture2D(tScene,vUv).rgb;
+    float l=dot(c,vec3(0.2126,0.7152,0.0722));
+    gl_FragColor=vec4(c*smoothstep(uThresh,uThresh+0.28,l),1.0); }`;
+const POST_BLUR=`varying vec2 vUv; uniform sampler2D tScene; uniform vec2 uDir;
+  void main(){ vec3 s=texture2D(tScene,vUv).rgb*0.227027;
+    s+=texture2D(tScene,vUv+uDir*1.3846).rgb*0.3162162; s+=texture2D(tScene,vUv-uDir*1.3846).rgb*0.3162162;
+    s+=texture2D(tScene,vUv+uDir*3.2308).rgb*0.0702703; s+=texture2D(tScene,vUv-uDir*3.2308).rgb*0.0702703;
+    gl_FragColor=vec4(s,1.0); }`;
+const POST_FINAL=`varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom;
+  uniform float uBloom; uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uCA;
+  vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }
+  void main(){
+    vec2 d=vUv-0.5; float r2=dot(d,d);
+    vec2 ca=d*r2*uCA;                                        // radial chromatic aberration, edge-weighted
+    vec3 c; c.r=texture2D(tScene,vUv+ca).r; c.g=texture2D(tScene,vUv).g; c.b=texture2D(tScene,vUv-ca).b;
+    c+=texture2D(tBloom,vUv).rgb*uBloom;
+    c=aces(c*1.05);
+    c=c*uTint+uLift;
+    float lum=dot(c,vec3(0.2126,0.7152,0.0722)); c=mix(vec3(lum),c,uSat);
+    c*=1.0-r2*0.78;                                          // in-shader vignette (smooth, banding-free)
+    gl_FragColor=vec4(c,1.0); }`;
+function initPost(){
+  try{
+    const p={};
+    const mk=(w,h)=>{ const rt=new THREE.WebGLRenderTarget(w,h,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,depthBuffer:false}); return rt; };
+    const isW2=gl.renderer.capabilities.isWebGL2;
+    p.scene = (isW2 && THREE.WebGLMultisampleRenderTarget)
+      ? new THREE.WebGLMultisampleRenderTarget(8,8,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter})
+      : new THREE.WebGLRenderTarget(8,8,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
+    p.bloomA=mk(8,8); p.bloomB=mk(8,8);
+    p.cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+    p.quadScene=new THREE.Scene();
+    p.quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2), null); p.quadScene.add(p.quad);
+    p.mBright=new THREE.ShaderMaterial({ vertexShader:POST_VERT, fragmentShader:POST_BRIGHT, depthTest:false, depthWrite:false,
+      uniforms:{ tScene:{value:null}, uThresh:{value:0.62} } });
+    p.mBlur=new THREE.ShaderMaterial({ vertexShader:POST_VERT, fragmentShader:POST_BLUR, depthTest:false, depthWrite:false,
+      uniforms:{ tScene:{value:null}, uDir:{value:new THREE.Vector2(0,0)} } });
+    p.mFinal=new THREE.ShaderMaterial({ vertexShader:POST_VERT, fragmentShader:POST_FINAL, depthTest:false, depthWrite:false,
+      uniforms:{ tScene:{value:null}, tBloom:{value:null}, uBloom:{value:0.8},
+        uTint:{value:new THREE.Vector3(1,1,1)}, uLift:{value:new THREE.Vector3(0,0,0)}, uSat:{value:1.05}, uCA:{value:0.010} } });
+    gl.post=p; postResize();
+  } catch(e){ gl.post=null; console.warn("[post] init failed — direct render", e); }
+}
+function postResize(){
+  if (!gl.post) return;
+  const w=Math.max(8,Math.round(VIEW_W*(gl.renderScale||1))), h=Math.max(8,Math.round(VIEW_H*(gl.renderScale||1)));
+  gl.post.scene.setSize(w,h);
+  gl.post.bloomA.setSize(w>>2,h>>2); gl.post.bloomB.setSize(w>>2,h>>2);
+}
+function postPass(mat, target){
+  gl.post.quad.material=mat;
+  gl.renderer.setRenderTarget(target);
+  gl.renderer.render(gl.post.quadScene, gl.post.cam);
+}
+function postRender(){
+  const p=gl.post, t=mapTheme(), g=t.grade||{};
+  const doBloom=qLevel>=2;
+  gl.renderer.setRenderTarget(p.scene);
+  gl.renderer.render(gl.scene, gl.camera);
+  if (doBloom){
+    p.mBright.uniforms.tScene.value=p.scene.texture; postPass(p.mBright, p.bloomA);
+    for (let k=0;k<2;k++){
+      p.mBlur.uniforms.tScene.value=p.bloomA.texture; p.mBlur.uniforms.uDir.value.set(1/p.bloomA.width,0); postPass(p.mBlur,p.bloomB);
+      p.mBlur.uniforms.tScene.value=p.bloomB.texture; p.mBlur.uniforms.uDir.value.set(0,1/p.bloomB.height); postPass(p.mBlur,p.bloomA);
+    }
+  }
+  p.mFinal.uniforms.tScene.value=p.scene.texture;
+  p.mFinal.uniforms.tBloom.value=doBloom?p.bloomA.texture:null;
+  p.mFinal.uniforms.uBloom.value=doBloom?(g.bloom||0.9):0.0;
+  const tint=g.tint||[1,1,1], lift=g.lift||[0,0,0];
+  p.mFinal.uniforms.uTint.value.set(tint[0],tint[1],tint[2]);
+  p.mFinal.uniforms.uLift.value.set(lift[0],lift[1],lift[2]);
+  p.mFinal.uniforms.uSat.value=g.sat||1.05;
+  postPass(p.mFinal, null);
+  gl.renderer.setRenderTarget(null);
+}
+// neutral studio-style reflection cube (built once): cool sky above, dark ground below. Gives every
+// metalness surface real specular life without per-theme rebuild churn.
+function makeEnvMap(){
+  const faces=[];
+  for (let f=0; f<6; f++){
+    const cv=document.createElement("canvas"); cv.width=cv.height=64; const g=cv.getContext("2d");
+    const gr=g.createLinearGradient(0,0,0,64);
+    if (f===2){ gr.addColorStop(0,"#3a4a5e"); gr.addColorStop(1,"#232f3f"); }          // +Y (up): brightest
+    else if (f===3){ gr.addColorStop(0,"#05070b"); gr.addColorStop(1,"#030406"); }     // -Y (down): near-black
+    else { gr.addColorStop(0,"#2c3a4c"); gr.addColorStop(0.6,"#131b26"); gr.addColorStop(1,"#070a10"); }
+    g.fillStyle=gr; g.fillRect(0,0,64,64);
+    faces.push(cv);
+  }
+  const tex=new THREE.CubeTexture(faces); tex.needsUpdate=true; return tex;
 }
 // Re-tint the whole scene (background, fog, lights) to the active map's palette. Cheap; safe to call
 // on every map switch. Kept separate so buildStaticGL and any live theme change share one path.
@@ -2222,19 +2330,36 @@ function buildStaticGL(){
   //   columns     -> molten cylinder + a glowing top ring
   //   crystals    -> faceted cone + edge glints (the one style where wireframe reads as facets)
   const wh=G.wallH*(t.wallH||1);
-  const wallMat=new THREE.MeshStandardMaterial({ color:t.wall, emissive:t.wallEmis||0x000000, emissiveIntensity:t.wallEmisInt||0, roughness:0.55, metalness:0.45 });
+  const wallMat=new THREE.MeshStandardMaterial({ color:t.wall, emissive:t.wallEmis||0x000000, emissiveIntensity:t.wallEmisInt||0,
+    roughness:0.5, metalness:0.55, envMap:gl.envMap||null });
   const wallMatB=wallMat.clone(); wallMatB.color.multiplyScalar(1.22);          // subtle tonal alternation
-  const trimMat=new THREE.MeshStandardMaterial({ color:t.rim, emissive:t.rim, emissiveIntensity:1.15, roughness:0.35, metalness:0.2 });
+  const trimMat=new THREE.MeshStandardMaterial({ color:t.rim, emissive:t.rim, emissiveIntensity:1.7, roughness:0.35, metalness:0.2 });
   const trimMatB=(t.rim2&&t.rim2!==t.rim)?trimMat.clone():trimMat; if (trimMatB!==trimMat){ trimMatB.color.setHex(t.rim2); trimMatB.emissive.setHex(t.rim2); }
+  deckMat.envMap=gl.envMap||null; deckMat.envMapIntensity=0.35;
+  // chamfered slab: an extruded rounded-rect with a real bevel, so wall edges CATCH LIGHT the way
+  // machined metal does — the single biggest "this is real geometry" tell vs. raw boxes
+  const bevelBox=(bw,bh,bd)=>{
+    const r=Math.min(5, bw/2-0.5, bd/2-0.5);
+    const s=new THREE.Shape();
+    s.moveTo(-bw/2+r,-bd/2); s.lineTo(bw/2-r,-bd/2); s.quadraticCurveTo(bw/2,-bd/2,bw/2,-bd/2+r);
+    s.lineTo(bw/2,bd/2-r); s.quadraticCurveTo(bw/2,bd/2,bw/2-r,bd/2);
+    s.lineTo(-bw/2+r,bd/2); s.quadraticCurveTo(-bw/2,bd/2,-bw/2,bd/2-r);
+    s.lineTo(-bw/2,-bd/2+r); s.quadraticCurveTo(-bw/2,-bd/2,-bw/2+r,-bd/2);
+    const g=new THREE.ExtrudeGeometry(s,{ depth:bh-6, bevelEnabled:true, bevelThickness:3, bevelSize:2.5, bevelSegments:2, curveSegments:3 });
+    g.rotateX(-Math.PI/2);                                  // extrusion axis -> up
+    return g;
+  };
   let i=0;
   for (const w of walls){
     const pil=isPillar(w), r=Math.min(w.w,w.h)/2, alt=hash2(w.x,w.y)>0.5;
     const bodyM=alt?wallMatB:wallMat, trimM=(pil&&i%2)?trimMatB:trimMat;
     if (pil && t.style==="column"){
-      const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r,r*1.08,wh*1.35,14), bodyM);
+      const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r,r*1.08,wh*1.35,18), bodyM);
       mesh.position.set(w.x+w.w/2, wh*1.35/2, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
       const ring=new THREE.Mesh(new THREE.TorusGeometry(r*0.92,1.6,8,22), trimM);
       ring.rotation.x=Math.PI/2; ring.position.set(w.x+w.w/2, wh*1.35-2, w.y+w.h/2); root.add(ring);
+      const ring2=new THREE.Mesh(new THREE.TorusGeometry(r*1.02,1.2,8,22), trimM);   // base ember ring
+      ring2.rotation.x=Math.PI/2; ring2.position.set(w.x+w.w/2, 2.4, w.y+w.h/2); root.add(ring2);
     } else if (pil && t.style==="crystal"){
       const geo=new THREE.ConeGeometry(r*1.12,wh*2.0,6);
       const mesh=new THREE.Mesh(geo, bodyM);
@@ -2244,14 +2369,24 @@ function buildStaticGL(){
         new THREE.LineBasicMaterial({ color:(i%2&&t.rim2)?t.rim2:t.rim, transparent:true, opacity:0.75 }));
       edges.position.copy(mesh.position); edges.rotation.copy(mesh.rotation); root.add(edges);
     } else {
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(w.w,wh,w.h), bodyM);
-      mesh.position.set(w.x+w.w/2, wh/2, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+      const mesh=new THREE.Mesh(bevelBox(w.w,wh,w.h), bodyM);
+      mesh.position.set(w.x+w.w/2, 3, w.y+w.h/2); mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
       // recessed light strip along the top face — the neon reads as built-in fixture lighting
-      const trim=new THREE.Mesh(new THREE.BoxGeometry(Math.max(4,w.w-6),1.8,Math.max(4,w.h-6)), trimM);
-      trim.position.set(w.x+w.w/2, wh+0.9, w.y+w.h/2); root.add(trim);
+      const trim=new THREE.Mesh(new THREE.BoxGeometry(Math.max(4,w.w-9),1.8,Math.max(4,w.h-9)), trimM);
+      trim.position.set(w.x+w.w/2, wh+0.4, w.y+w.h/2); root.add(trim);
     }
     i++;
   }
+  // drifting dust motes — sparse atmosphere particles in the play volume, tinted to the theme.
+  // Animated in renderWorld3D (slow sine drift); additive so they sparkle through the fog.
+  const N=240, pos=new Float32Array(N*3), base=new Float32Array(N*3), phase=new Float32Array(N);
+  for (let k=0;k<N;k++){ base[k*3]=hash2(k,1)*WORLD_W; base[k*3+1]=6+hash2(k,2)*90; base[k*3+2]=hash2(k,3)*WORLD_H; phase[k]=hash2(k,4)*Math.PI*2;
+    pos[k*3]=base[k*3]; pos[k*3+1]=base[k*3+1]; pos[k*3+2]=base[k*3+2]; }
+  const dg=new THREE.BufferGeometry(); dg.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  const dust=new THREE.Points(dg, new THREE.PointsMaterial({ color:t.rim, size:2.4, transparent:true, opacity:0.28,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true }));
+  root.add(dust);
+  gl.dust={ points:dust, base, phase, n:N };
   gl.scene.add(root); gl.staticGroup=root;
 }
 function syncPool(pool, n, make){                 // grow/shrink a mesh pool to n and return active slice
@@ -2266,9 +2401,11 @@ function syncPool(pool, n, make){                 // grow/shrink a mesh pool to 
 //   body[]   -> recolored to the player's chosen color (or IT red) each frame
 //   accent[] -> recolored + emissive to the class accent (or IT trim) each frame
 // makePlayerMesh builds all three rigs into one root and shows the active class.
-function bodyMat(){ return new THREE.MeshStandardMaterial({ color:0x63e6ff, emissive:0x0b1119, emissiveIntensity:0.3, roughness:0.4, metalness:0.5 }); }
+function bodyMat(){ return new THREE.MeshStandardMaterial({ color:0x63e6ff, emissive:0x0b1119, emissiveIntensity:0.3, roughness:0.35, metalness:0.6,
+  envMap:(typeof gl!=="undefined"&&gl.envMap)||null, envMapIntensity:0.7 }); }
 function accMat(int){ const m=new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffffff, emissiveIntensity:int||1.5, roughness:0.25, metalness:0.4 }); m.userData.baseInt=int||1.5; return m; }
-function limbMat(){ return new THREE.MeshStandardMaterial({ color:0x1a2230, emissive:0x000000, roughness:0.6, metalness:0.6 }); }
+function limbMat(){ return new THREE.MeshStandardMaterial({ color:0x1a2230, emissive:0x000000, roughness:0.5, metalness:0.7,
+  envMap:(typeof gl!=="undefined"&&gl.envMap)||null, envMapIntensity:0.5 }); }
 
 function buildStrikerRig(){
   const g=new THREE.Group(), body=[], accent=[];
@@ -2357,11 +2494,25 @@ function makePlayerMesh(){
 }
 function renderWorld3D(){
   const you=players[0];
-  // camera: 3/4 chase, follows you, gentle screen-shake
+  // camera: 3/4 chase with critically-damped smoothing (no hard lock) + a dash FOV punch.
+  // The lag is tiny (~80ms) but it makes motion read as filmed rather than clamped.
   const sh=effects.shake, jx=(Math.random()*2-1)*sh*1.6, jz=(Math.random()*2-1)*sh*1.6;
   const camH=480, camBack=360;
-  gl.camera.position.set(you.x+jx, camH, you.y+camBack+jz);
-  gl.camera.lookAt(you.x, 30, you.y-40);
+  if (!gl.camT) gl.camT={x:you.x, z:you.y, fov:52};
+  const k=1-Math.exp(-0.016*14);                             // frame-rate-stable smoothing factor
+  gl.camT.x+=(you.x-gl.camT.x)*k; gl.camT.z+=(you.y-gl.camT.z)*k;
+  const wantFov=(you.dash&&you.dash.t>0)?58:52;              // dash = short FOV surge (speed you can feel)
+  gl.camT.fov+=(wantFov-gl.camT.fov)*(1-Math.exp(-0.016*10));
+  if (Math.abs(gl.camera.fov-gl.camT.fov)>0.02){ gl.camera.fov=gl.camT.fov; gl.camera.updateProjectionMatrix(); }
+  gl.camera.position.set(gl.camT.x+jx, camH, gl.camT.z+camBack+jz);
+  gl.camera.lookAt(gl.camT.x, 30, gl.camT.z-40);
+  // dust drift — slow sine wander per mote
+  if (gl.dust){ const tt=performance.now()/1000, a=gl.dust.points.geometry.attributes.position.array;
+    for (let m=0;m<gl.dust.n;m++){ const b3=m*3, ph=gl.dust.phase[m];
+      a[b3]  =gl.dust.base[b3]  +Math.sin(tt*0.35+ph)*16;
+      a[b3+1]=gl.dust.base[b3+1]+Math.sin(tt*0.22+ph*1.7)*7;
+      a[b3+2]=gl.dust.base[b3+2]+Math.cos(tt*0.28+ph)*16; }
+    gl.dust.points.geometry.attributes.position.needsUpdate=true; }
   gl.playerLight.position.set(you.x, 130, you.y);
   const it=itIndex>=0?players[itIndex]:null;
   if (it){ gl.itLight.position.set(it.x,120,it.y); gl.itLight.intensity=2.2; } else gl.itLight.intensity=0;
@@ -2499,7 +2650,9 @@ function renderWorld3D(){
     o.root.position.set(p.x,26+bob,p.y); o.root.rotation.y=-p.heading+Math.PI/2;
     o.body.material.opacity=p.human?0.72:0.5; });
 
-  gl.renderer.render(gl.scene, gl.camera);
+  // --- present: through the post chain when available (LOW tier renders direct) ---
+  if (gl.post && qLevel>=1){ try{ postRender(); }catch(e){ gl.post=null; gl.renderer.setRenderTarget(null); gl.renderer.render(gl.scene, gl.camera); } }
+  else gl.renderer.render(gl.scene, gl.camera);
 }
 function project3(wx,wy,wz){        // world floor point -> screen px (for fog + markers over the 3D)
   gl.proj.set(wx, wz||0, wy); gl.proj.project(gl.camera);
@@ -2662,10 +2815,12 @@ function render3DOverlay(){
   drawEffects3D();           // rings / particles / shove cone — all the juice, back in 3D
   drawPlayerLabels3D();      // rank / name / dash pips / carrying charge + class/ability ring — back in 3D
   drawAimReticle();          // Striker hold-to-aim cone + LOCK target
-  // vignette + terror throb (same mood as 2D)
-  const vg=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.42, VIEW_W/2,VIEW_H/2,VIEW_H*0.82);
-  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.42)");
-  ctx.fillStyle=vg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  // vignette: the post shader owns it when active; this 2D fallback covers LOW tier / no-post
+  if (!(gl.post && qLevel>=1)){
+    const vg=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.42, VIEW_W/2,VIEW_H/2,VIEW_H*0.82);
+    vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.42)");
+    ctx.fillStyle=vg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  }
   if (terrorLevel>0){ const inten=terrorLevel*0.34+terrorFlash*terrorFlash*0.5;
     const tv=ctx.createRadialGradient(VIEW_W/2,VIEW_H/2,VIEW_H*0.26, VIEW_W/2,VIEW_H/2,VIEW_H*0.82);
     tv.addColorStop(0,"rgba(255,0,0,0)"); tv.addColorStop(0.65,"rgba(255,24,24,"+(inten*0.45)+")"); tv.addColorStop(1,"rgba(255,20,20,"+Math.min(0.85,inten)+")");
@@ -2977,37 +3132,155 @@ function drawBanner(){
   if (danger){ ctx.shadowColor=acc; ctx.shadowBlur=12; }
   ctx.fillText(num, x+W-14, y+H/2+1); ctx.shadowBlur=0;
   ctx.textBaseline="alphabetic";
-  // sub-line: what the timer means (small, under the pill, only when a cut looms)
+  // sub-line: what the timer means — and in the final 10s, WHO is about to be cut (by name, red)
   if (match.phase==="live" && match.marksLeft.length){
-    ctx.font="500 10.5px "+F.d; ctx.textAlign="center"; ctx.fillStyle="rgba(143,163,186,0.75)";
-    ctx.fillText("lowest score is out · "+activePlayers().length+" remain", VIEW_W/2, y+H+14);
+    const next=Math.ceil(match.marksLeft[0]-match.elapsed);
+    const act=activePlayers();
+    const asc=act.slice().sort((a,b)=>a.score-b.score);
+    const unique=asc.length>1 && asc[0].score<asc[1].score;   // only call a name when the lowest is unambiguous
+    if (next<=10 && act.length>3 && unique){
+      const target=asc[0];
+      const pl=0.5+0.5*Math.sin(performance.now()/140);
+      ctx.font="700 12px "+F.d; ctx.textAlign="center";
+      ctx.fillStyle="rgba(255,86,70,"+(0.75+pl*0.25)+")";
+      ctx.fillText("⚠ "+(target.human?"YOU ARE":target.name.slice(0,10)+" IS")+" ON THE CHOP", VIEW_W/2, y+H+15);
+    } else {
+      ctx.font="500 10.5px "+F.d; ctx.textAlign="center"; ctx.fillStyle="rgba(143,163,186,0.75)";
+      ctx.fillText("lowest score is out · "+act.length+" remain", VIEW_W/2, y+H+14);
+    }
   }
 }
-// your live combat state — a row of pill chips top-center under the banner
+// ============================================================
+// COCKPIT — the player plate, bottom-center. Answers the two questions that matter mid-chase
+// without reading anything else: "what do I have right now" (ability + dash + carry, with real
+// cooldown visuals) and "am I about to get culled" (a live safety meter against the lowest score).
+// ============================================================
 function drawSelfStatus(){
-  const you=players[0]; if (!you) return;
-  const y=64;
-  const chips=[];
-  if (you.isIt) chips.push({t:"YOU ARE IT",fg:"#ff8a7a",border:"rgba(255,86,70,0.55)",fill:"rgba(60,12,8,0.85)"});
-  else if (you.role==="interference"){
-    chips.push({t:"GHOST",fg:"#c9b8ff",border:"rgba(169,139,255,0.5)"});
-    chips.push({t:"BLOCK "+"■".repeat(you.blockCharges)+"□".repeat(Math.max(0,CFG.blockCharges-you.blockCharges)),fg:"#c9b8ff"});
+  const you=players[0]; if (!you || match.phase==="over") return;
+  const H=64, y=VIEW_H-H-14;
+  const ghost=you.role==="interference";
+  // --- measure segments ---
+  const tileW=52, dashW=96, carryW=120, meterW=176, pad=16, gap=14;
+  const segs=ghost?[150,meterW]:[tileW,dashW,carryW,meterW];
+  const W=segs.reduce((a,b)=>a+b,0)+pad*2+gap*(segs.length-1);
+  const x=VIEW_W/2-W/2;
+  panel(x,y,W,H,14, you.isIt?"#ff5646":undefined);
+  let cx=x+pad;
+  ctx.textBaseline="middle";
+  if (!ghost){
+    // ── ability tile: class glyph + radial cooldown sweep + keybind ──
+    const c=clsById(you.cls), ready=you.abilCdT<=0&&!you.isIt, ts=44, ty=y+(H-ts)/2-3;
+    rr(cx,ty,ts,ts,10); ctx.fillStyle=you.isIt?"rgba(70,14,10,0.9)":"rgba(7,11,18,0.9)"; ctx.fill();
+    ctx.strokeStyle=you.isIt?"rgba(255,86,70,0.8)":(ready?rgba(c.accent,0.95):rgba(c.accent,0.30));
+    ctx.lineWidth=ready&&!you.isIt?2:1.2; rr(cx+0.5,ty+0.5,ts-1,ts-1,10); ctx.stroke();
+    if (you.isIt){
+      ctx.fillStyle="#ff6a58"; ctx.font="700 17px "+F.d; ctx.textAlign="center";
+      ctx.fillText("IT",cx+ts/2,ty+ts/2+1);
+    } else {
+      ctx.fillStyle=ready?c.accent:"rgba(143,163,186,0.55)"; ctx.font="700 19px "+F.d; ctx.textAlign="center";
+      ctx.fillText(CLS_LETTER[you.cls]||"?",cx+ts/2,ty+ts/2+1);
+      if (!ready){                                       // radial sweep: dark shade drains clockwise as it recharges
+        const frac=1-Math.min(1,you.abilCdT/c.cd);
+        ctx.fillStyle="rgba(4,7,12,0.72)";
+        ctx.beginPath(); ctx.moveTo(cx+ts/2,ty+ts/2);
+        ctx.arc(cx+ts/2,ty+ts/2,ts*0.72,-Math.PI/2+frac*Math.PI*2,-Math.PI/2+Math.PI*2); ctx.closePath();
+        ctx.save(); rr(cx,ty,ts,ts,10); ctx.clip(); ctx.fill(); ctx.restore();
+        ctx.fillStyle="#f2f7ff"; ctx.font="700 12px "+F.m; ctx.fillText(you.abilCdT.toFixed(1),cx+ts/2,ty+ts/2+1);
+      } else {                                           // ready pulse
+        const pl=0.5+0.5*Math.sin(performance.now()/240);
+        ctx.strokeStyle=rgba(c.accent,0.25+pl*0.45); ctx.lineWidth=3.5;
+        rr(cx-2,ty-2,ts+4,ts+4,12); ctx.stroke();
+      }
+    }
+    ctx.font="600 8.5px "+F.d; ctx.textAlign="center"; ctx.fillStyle="rgba(93,112,133,0.9)";
+    ctx.fillText(you.isIt?"TAG!":"R-CLICK",cx+ts/2,ty+ts+8);
+    cx+=tileW+gap;
+    // ── dash segments: filled bars + live regen fill on the recharging one ──
+    const n=CFG.dashCharges, bw=(dashW-((n-1)*5))/n, by=y+H/2-10;
+    for (let d2=0;d2<n;d2++){
+      const bx=cx+d2*(bw+5);
+      rr(bx,by,bw,10,4); ctx.fillStyle="rgba(7,11,18,0.9)"; ctx.fill();
+      ctx.strokeStyle="rgba(127,224,255,0.28)"; ctx.lineWidth=1; rr(bx+0.5,by+0.5,bw-1,9,4); ctx.stroke();
+      if (d2<you.dashCharges){ ctx.fillStyle="#7fe0ff"; rr(bx+1.5,by+1.5,bw-3,7,3); ctx.fill(); }
+      else if (d2===you.dashCharges && you.dashRegenT>0){   // the one currently recharging
+        const rf=1-Math.min(1,you.dashRegenT/CFG.dashRegen);
+        ctx.fillStyle="rgba(127,224,255,0.45)"; rr(bx+1.5,by+1.5,Math.max(2,(bw-3)*rf),7,3); ctx.fill(); }
+    }
+    ctx.font="600 8.5px "+F.d; ctx.textAlign="center"; ctx.fillStyle="rgba(93,112,133,0.9)";
+    ctx.fillText("DASH · SPACE",cx+dashW/2,by+24);
+    cx+=dashW+gap;
+  } else {
+    // ── ghost controls: block pips + reveal key ──
+    const n=CFG.blockCharges, by=y+H/2-10;
+    ctx.font="600 12px "+F.d; ctx.textAlign="left"; ctx.fillStyle="#c9b8ff";
+    ctx.fillText("GHOST",cx,y+H/2-14);
+    for (let b2=0;b2<n;b2++){ const bx=cx+b2*26;
+      rr(bx,by+8,20,10,3); ctx.fillStyle=b2<you.blockCharges?"#a98bff":"rgba(169,139,255,0.15)"; ctx.fill(); }
+    ctx.font="600 8.5px "+F.d; ctx.fillStyle="rgba(148,131,196,0.9)";
+    ctx.fillText("BLOCK · CLICK      REVEAL · SPACE",cx,by+30);
+    cx+=150+gap;
   }
-  if (you.role!=="interference"){
-    chips.push({t:"DASH "+"●".repeat(you.dashCharges)+"○".repeat(Math.max(0,CFG.dashCharges-you.dashCharges)),fg:"#7fe0ff"});
-    const c=clsById(you.cls), ready=you.abilCdT<=0&&!you.isIt;
-    chips.push({t:c.abil.toUpperCase()+(you.isIt?"":ready?" ✓":" "+you.abilCdT.toFixed(1)+"s"),
-      fg:ready?c.accent:"#5c6c7c", border:ready?rgba(c.accent,0.55):undefined});
+  // ── carry state ──
+  if (!ghost){
+    const cyM=y+H/2-3;
+    if (you.carrying){
+      const full=you.carrying.value>=CFG.carryGrowCap-0.01, amt=Math.round(CFG.carryValue+you.carrying.value);
+      const pl=0.5+0.5*Math.sin(performance.now()/(full?110:400));
+      ctx.beginPath(); ctx.arc(cx+10,cyM,7,0,Math.PI*2);
+      ctx.fillStyle=full?("rgba(255,242,160,"+(0.75+pl*0.25)+")"):"#ffd678"; ctx.fill();
+      ctx.font="700 15px "+F.m; ctx.textAlign="left"; ctx.fillStyle=full?"#fff2a0":"#ffd678";
+      ctx.fillText("+"+amt,cx+24,cyM);
+      ctx.font="600 8.5px "+F.d; ctx.fillStyle=full?rgba("#fff2a0",0.7+pl*0.3):"rgba(93,112,133,0.9)";
+      ctx.fillText(full?"FULL — BANK IT!":"CARRYING",cx,cyM+20);
+      if (!full){                                          // growth toward FULL
+        const gfrac=Math.min(1,you.carrying.value/CFG.carryGrowCap);
+        rr(cx+62,cyM-4,46,8,4); ctx.fillStyle="rgba(7,11,18,0.9)"; ctx.fill();
+        ctx.fillStyle="rgba(255,214,120,0.8)"; rr(cx+63,cyM-3,Math.max(2,44*gfrac),6,3); ctx.fill(); }
+    } else {
+      ctx.font="600 11px "+F.d; ctx.textAlign="left"; ctx.fillStyle="rgba(93,112,133,0.6)";
+      ctx.fillText("NO CORE",cx,cyM);
+      ctx.font="600 8.5px "+F.d; ctx.fillText("grab one · run into carriers",cx,cyM+20);
+    }
+    cx+=carryW+gap;
   }
-  if (you.carrying){ const full=you.carrying.value>=CFG.carryGrowCap-0.01, amt=Math.round(CFG.carryValue+you.carrying.value);
-    chips.push({t:full?("CORE FULL +"+amt+" — BANK IT"):("CARRYING +"+amt),
-      fg:full?"#fff2a0":"#ffd678", border:full?"rgba(255,220,120,0.7)":undefined, fill:full?"rgba(60,44,8,0.85)":undefined}); }
-  if (you.stun>0) chips.push({t:"STUNNED",fg:"#ffe27a",border:"rgba(255,226,122,0.6)"});
-  if (!chips.length) return;
-  const gap=8; let total=0;
-  for (const ch of chips) total+=chipW(ch.t,"600 13px "+F.d)+gap; total-=gap;
-  let sx=VIEW_W/2-total/2;
-  for (const ch of chips){ sx+=chip(sx,y,ch.t,ch)+gap; }
+  // (ghost path: cx already advanced past its own wider control block)
+  // ── cull-danger meter ──
+  const act=players.filter(p=>p.role!=="interference");
+  const cutPending = match.phase==="live" && act.length>3;
+  const my=y+H/2-3;
+  if (ghost){
+    ctx.font="600 11px "+F.d; ctx.textAlign="left"; ctx.fillStyle="rgba(148,131,196,0.8)";
+    ctx.fillText("you're out — haunt them",cx,my+4);
+  } else if (cutPending){
+    const others=act.filter(p=>p!==you), lowest=others.reduce((a,b)=>b.score<a.score?b:a,others[0]);
+    const iAmLowest = you.score < lowest.score;            // STRICTLY lowest — a tie shows the margin bar, not the alarm
+    const next=match.marksLeft.length?Math.ceil(match.marksLeft[0]-match.elapsed):99;
+    ctx.textAlign="left";
+    if (iAmLowest){
+      const pl=0.5+0.5*Math.sin(performance.now()/(next<=10?110:260));
+      ctx.font="700 13px "+F.d; ctx.fillStyle="rgba(255,86,70,"+(0.7+pl*0.3)+")";
+      ctx.fillText("⚠ YOU'RE THE TARGET",cx,my-6);
+      ctx.font="600 10px "+F.d; ctx.fillStyle="#ffb0a4";
+      ctx.fillText("outscore "+lowest.name.slice(0,9)+" — cut in "+next+"s",cx,my+13);
+    } else {
+      const margin=Math.round(you.score-lowest.score);
+      const frac=Math.max(0.04,Math.min(1,margin/40));
+      const col = margin<8?"#ff5646" : margin<18?"#ffb060" : "#6fe6a6";
+      ctx.font="600 9.5px "+F.d; ctx.fillStyle="rgba(93,112,133,0.9)";
+      ctx.fillText("CULL SAFETY",cx,my-11);
+      rr(cx,my-3,meterW-24,9,4); ctx.fillStyle="rgba(7,11,18,0.9)"; ctx.fill();
+      ctx.strokeStyle="rgba(143,163,186,0.2)"; ctx.lineWidth=1; rr(cx+0.5,my-2.5,meterW-25,8,4); ctx.stroke();
+      ctx.fillStyle=col; rr(cx+1.5,my-1.5,Math.max(2,(meterW-27)*frac),6,3); ctx.fill();
+      ctx.font="600 10px "+F.d; ctx.fillStyle=col;
+      ctx.fillText("+"+margin+" over "+lowest.name.slice(0,8),cx,my+16);
+    }
+  } else {
+    ctx.font="600 11px "+F.d; ctx.textAlign="left"; ctx.fillStyle="rgba(111,230,166,0.85)";
+    ctx.fillText(match.phase==="showdown"?"FINAL 3 — bank to win":"no cut pending",cx,my+4);
+  }
+  ctx.textBaseline="alphabetic";
+  // transient: stun flash above the plate
+  if (you.stun>0){ chip(VIEW_W/2-38,y-34,"STUNNED",{fg:"#ffe27a",border:"rgba(255,226,122,0.6)"}); }
 }
 // big center-screen announcement for culls + showdown: scales in, holds, fades
 function drawAnnounce(){
