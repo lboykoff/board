@@ -1344,6 +1344,15 @@ function updateInterference(p, dt){
   if (p.human){ mv=readMoveKeys();
     if ((tapDoor||tapAbil) && p.blockCharges>0) dropGate(p);               // LMB / R-click — drop a block
     if (tapDash && p.beaconCdT<=0) beacon(p);                             // Space — reveal IT
+  } else if (p.remote){
+    // a REMOTE (client) ghost is driven by the input they send — same controls as the local ghost,
+    // so friends keep control after they're culled (the interference branch skips the normal remote path).
+    const ni=net.inputs[p.slot];
+    if (ni){ mv={dx:ni.dx, dy:ni.dy};
+      if ((ni.door||ni.abil) && p.blockCharges>0) dropGate(p);
+      if (ni.dash && p.beaconCdT<=0) beacon(p);
+      ni.dash=false; ni.door=false; ni.abil=false;                        // consume the one-shot taps
+    } else mv={dx:0,dy:0};
   } else {
     p.aiTimer-=dt; if(p.aiTimer<=0){p.aiTimer=0.8+Math.random(); p.aiWander={x:Math.random()*2-1,y:Math.random()*2-1};}
     mv={dx:p.aiWander.x, dy:p.aiWander.y}; const m=Math.hypot(mv.dx,mv.dy)||1; mv.dx/=m; mv.dy/=m;
