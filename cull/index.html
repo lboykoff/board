@@ -412,7 +412,7 @@ const THEMES = {
     floor:0x0a1018, seam:0x2ea6d8, plateJitter:0.030, tile:96,
     wall:0x18222e, wallEmis:0x0a1622, wallEmisInt:0.12, rim:0x69e0ff, rim2:0x69e0ff, wallH:1.0, style:"box",
     hemiSky:0x2a3d55, hemiGround:0x05070b, hemiInt:0.65, ambCol:0x223247, ambInt:0.50, sunCol:0x8fb4dd, sunInt:0.60,
-    fillCol:0x2a4a6a, fillInt:0.30,
+    fillCol:0x2a4a6a, fillInt:0.30, refl:0.55,
     grade:{ tint:[0.96,1.02,1.08], lift:[0.004,0.007,0.012], sat:1.06, bloom:0.85 },   // cool cyan push
   },
   // FOUNDRY — molten industrial: warm orange embers, tall round columns, smoky red fog
@@ -422,7 +422,7 @@ const THEMES = {
     floor:0x140a06, seam:0xd9631f, plateJitter:0.040, tile:72,
     wall:0x2a140a, wallEmis:0x5e2207, wallEmisInt:0.55, rim:0xff8a2a, rim2:0xffc24d, wallH:1.5, style:"column",
     hemiSky:0x5a2c12, hemiGround:0x0b0503, hemiInt:0.72, ambCol:0x3c1f10, ambInt:0.55, sunCol:0xffa24d, sunInt:0.72,
-    fillCol:0x7a3a14, fillInt:0.35,
+    fillCol:0x7a3a14, fillInt:0.35, refl:0.30,   // tall columns mirror hard — keep it a sheen, not a hole in the floor
     grade:{ tint:[1.10,0.98,0.90], lift:[0.014,0.006,0.003], sat:1.10, bloom:1.05 },   // warm ember crush
   },
   // SCRAMBLE — toxic overgrowth: acid-green + violet crystal spikes on a dark jade floor
@@ -432,7 +432,7 @@ const THEMES = {
     floor:0x07140d, seam:0x35d98a, plateJitter:0.026, tile:120,
     wall:0x112219, wallEmis:0x0e2e1c, wallEmisInt:0.55, rim:0x6cff9e, rim2:0xb070ff, wallH:1.25, style:"crystal",
     hemiSky:0x1e4a3a, hemiGround:0x03090a, hemiInt:0.70, ambCol:0x143728, ambInt:0.55, sunCol:0x8fe6b4, sunInt:0.62,
-    fillCol:0x2a5a3a, fillInt:0.32,
+    fillCol:0x2a5a3a, fillInt:0.32, refl:0.45,
     grade:{ tint:[0.94,1.06,0.98], lift:[0.004,0.010,0.007], sat:1.12, bloom:1.0 },    // acid jade wash
   },
 };
@@ -2178,13 +2178,18 @@ const POST_BLUR=`varying vec2 vUv; uniform sampler2D tScene; uniform vec2 uDir;
     s+=texture2D(tScene,vUv+uDir*1.3846).rgb*0.3162162; s+=texture2D(tScene,vUv-uDir*1.3846).rgb*0.3162162;
     s+=texture2D(tScene,vUv+uDir*3.2308).rgb*0.0702703; s+=texture2D(tScene,vUv-uDir*3.2308).rgb*0.0702703;
     gl_FragColor=vec4(s,1.0); }`;
-const POST_FINAL=`varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom;
-  uniform float uBloom; uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uCA;
+const POST_FINAL=`varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tBloom; uniform sampler2D tSoft;
+  uniform float uBloom; uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uCA; uniform float uDof;
   vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }
   void main(){
     vec2 d=vUv-0.5; float r2=dot(d,d);
     vec2 ca=d*r2*uCA;                                        // radial chromatic aberration, edge-weighted
     vec3 c; c.r=texture2D(tScene,vUv+ca).r; c.g=texture2D(tScene,vUv).g; c.b=texture2D(tScene,vUv-ca).b;
+    // tilt-shift DOF: sharp band around the player's screen row, soft toward top/bottom — the
+    // cinematic "miniature diorama" read that top-down games get from a real lens
+    float band=abs(vUv.y-0.52);
+    float dof=smoothstep(0.14,0.46,band)*uDof;
+    c=mix(c, texture2D(tSoft,vUv).rgb, dof);
     c+=texture2D(tBloom,vUv).rgb*uBloom;
     c=aces(c*1.05);
     c=c*uTint+uLift;
@@ -2200,7 +2205,8 @@ function initPost(){
       ? new THREE.WebGLMultisampleRenderTarget(8,8,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter})
       : new THREE.WebGLRenderTarget(8,8,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
     p.bloomA=mk(8,8); p.bloomB=mk(8,8);
-    p.refl=mk(8,8);                              // half-res mirrored-scene target for the glossy floor (HIGH tier)
+    p.refl=mk(8,8); p.reflB=mk(8,8);             // half-res mirrored-scene target + blur ping-pong (HIGH tier)
+    p.dofA=mk(8,8); p.dofB=mk(8,8);              // half-res soft copy of the scene for tilt-shift DOF
     p.cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
     p.quadScene=new THREE.Scene();
     p.quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2), null); p.quadScene.add(p.quad);
@@ -2209,7 +2215,7 @@ function initPost(){
     p.mBlur=new THREE.ShaderMaterial({ vertexShader:POST_VERT, fragmentShader:POST_BLUR, depthTest:false, depthWrite:false,
       uniforms:{ tScene:{value:null}, uDir:{value:new THREE.Vector2(0,0)} } });
     p.mFinal=new THREE.ShaderMaterial({ vertexShader:POST_VERT, fragmentShader:POST_FINAL, depthTest:false, depthWrite:false,
-      uniforms:{ tScene:{value:null}, tBloom:{value:null}, uBloom:{value:0.8},
+      uniforms:{ tScene:{value:null}, tBloom:{value:null}, tSoft:{value:null}, uBloom:{value:0.8}, uDof:{value:0},
         uTint:{value:new THREE.Vector3(1,1,1)}, uLift:{value:new THREE.Vector3(0,0,0)}, uSat:{value:1.05}, uCA:{value:0.010} } });
     gl.post=p; postResize();
   } catch(e){ gl.post=null; console.warn("[post] init failed — direct render", e); }
@@ -2219,7 +2225,8 @@ function postResize(){
   const w=Math.max(8,Math.round(VIEW_W*(gl.renderScale||1))), h=Math.max(8,Math.round(VIEW_H*(gl.renderScale||1)));
   gl.post.scene.setSize(w,h);
   gl.post.bloomA.setSize(w>>2,h>>2); gl.post.bloomB.setSize(w>>2,h>>2);
-  gl.post.refl.setSize(w>>1,h>>1);
+  gl.post.refl.setSize(w>>1,h>>1); gl.post.reflB.setSize(w>>1,h>>1);
+  gl.post.dofA.setSize(w>>1,h>>1); gl.post.dofB.setSize(w>>1,h>>1);
   gl.postW=w; gl.postH=h;                        // the size gl_FragCoord runs at inside the main pass
 }
 function postPass(mat, target){
@@ -2238,7 +2245,14 @@ function postRender(){
       p.mBlur.uniforms.tScene.value=p.bloomA.texture; p.mBlur.uniforms.uDir.value.set(1/p.bloomA.width,0); postPass(p.mBlur,p.bloomB);
       p.mBlur.uniforms.tScene.value=p.bloomB.texture; p.mBlur.uniforms.uDir.value.set(0,1/p.bloomB.height); postPass(p.mBlur,p.bloomA);
     }
+    // soft copy of the whole frame for the tilt-shift DOF band (HIGH tier only, rides on doBloom)
+    p.mBlur.uniforms.tScene.value=p.scene.texture; p.mBlur.uniforms.uDir.value.set(1.6/p.dofA.width,0); postPass(p.mBlur,p.dofA);
+    p.mBlur.uniforms.tScene.value=p.dofA.texture; p.mBlur.uniforms.uDir.value.set(0,1.6/p.dofA.height); postPass(p.mBlur,p.dofB);
+    p.mBlur.uniforms.tScene.value=p.dofB.texture; p.mBlur.uniforms.uDir.value.set(1.6/p.dofA.width,0); postPass(p.mBlur,p.dofA);
+    p.mBlur.uniforms.tScene.value=p.dofA.texture; p.mBlur.uniforms.uDir.value.set(0,1.6/p.dofA.height); postPass(p.mBlur,p.dofB);
   }
+  p.mFinal.uniforms.tSoft.value=doBloom?p.dofB.texture:null;
+  p.mFinal.uniforms.uDof.value=doBloom?0.85:0.0;
   p.mFinal.uniforms.tScene.value=p.scene.texture;
   p.mFinal.uniforms.tBloom.value=doBloom?p.bloomA.texture:null;
   p.mFinal.uniforms.uBloom.value=doBloom?(g.bloom||0.9):0.0;
@@ -2517,6 +2531,8 @@ function buildStaticGL(){
   // baked ground GI: a contact-AO ring plus a NEON LIGHT-SPILL pool around every wall footprint —
   // the emissive trims visibly bleed colored light onto the deck (the fake-bounce/"Lumen" read).
   bakeGroundGI(t, root);
+  // the world outside + props + animated details (fans, beacons, steam)
+  buildSetDressing(t, root);
   // drifting dust motes — sparse atmosphere particles in the play volume, tinted to the theme.
   // Animated in renderWorld3D (slow sine drift); additive so they sparkle through the fog.
   const N=240, pos=new Float32Array(N*3), base=new Float32Array(N*3), phase=new Float32Array(N);
@@ -2528,6 +2544,129 @@ function buildStaticGL(){
   root.add(dust);
   gl.dust={ points:dust, base, phase, n:N };
   gl.scene.add(root); gl.staticGroup=root;
+}
+// ============================================================
+// SET DRESSING — the "this is a real place" layer, all deterministic from the wall layout:
+//   • an OUTSIDE WORLD: background structures ringing the arena past the border walls (towers /
+//     chimneys / crystal monoliths per theme) with blinking beacon lights, fading into the fog
+//   • wall-top props: pipe runs with flanges on long walls, vent units with SPINNING FANS,
+//     antenna masts on pillars
+//   • hazard posts with blinking amber bulbs beside every door
+//   • steam vents that breathe puffs
+// Everything animated registers in gl.anim (driven per-frame in renderWorld3D). Nothing collides.
+// ============================================================
+function buildSetDressing(t, root){
+  gl.anim={ fans:[], beacons:[], steam:[] };
+  const wh=G.wallH*(t.wallH||1);
+  const metal=new THREE.MeshStandardMaterial({ color:new THREE.Color(t.wall).multiplyScalar(1.5), roughness:0.45, metalness:0.8 });
+  const darkBody=new THREE.MeshStandardMaterial({ color:new THREE.Color(t.wall).multiplyScalar(0.8), roughness:0.75, metalness:0.4 });
+  const emisMat=c=>new THREE.MeshStandardMaterial({ color:c, emissive:c, emissiveIntensity:1.6, roughness:0.4 });
+  const beacon=(x,y2,z,c,sp)=>{ const s=glowSprite(c,26); s.position.set(x,y2,z); root.add(s);
+    gl.anim.beacons.push({ s, sp:sp||(1.5+hash2(x,z)*2), ph:hash2(z,x)*6.28 }); };
+  // ---- the outside world: ~30 silhouette structures ringing the arena ----
+  for (let i=0;i<30;i++){
+    const side=i%4, u=hash2(i,51), dist=200+hash2(i,53)*420, along=hash2(i,57);
+    let x,z;
+    if (side===0){ x=along*WORLD_W;  z=-dist; } else if (side===1){ x=along*WORLD_W; z=WORLD_H+dist; }
+    else if (side===2){ x=-dist; z=along*WORLD_H; } else { x=WORLD_W+dist; z=along*WORLD_H; }
+    let m,h;
+    if (t.style==="column"){                     // foundry: chimney stacks with ember mouths
+      const r=34+u*56; h=200+hash2(i,61)*260;
+      m=new THREE.Mesh(new THREE.CylinderGeometry(r*0.82,r,h,12), darkBody);
+      const mouth=new THREE.Mesh(new THREE.TorusGeometry(r*0.7,4,6,16), emisMat(t.rim));
+      mouth.rotation.x=Math.PI/2; mouth.position.set(x,h+2,z); root.add(mouth);
+    } else if (t.style==="crystal"){             // scramble: giant monolith shards
+      const r=44+u*70; h=240+hash2(i,61)*320;
+      m=new THREE.Mesh(new THREE.ConeGeometry(r,h,5), darkBody);
+      m.rotation.y=hash2(i,63)*Math.PI;
+    } else {                                     // arena: blocky facility towers
+      const w2=70+u*110, d2=70+hash2(i,59)*110; h=150+hash2(i,61)*260;
+      m=new THREE.Mesh(new THREE.BoxGeometry(w2,h,d2), darkBody);
+      for (let s2=0;s2<3;s2++){                  // lit window strips on the arena-facing tower face
+        if (hash2(i,70+s2)>0.45) continue;
+        const strip=new THREE.Mesh(new THREE.BoxGeometry(side<2?w2*0.6:1.5,2.2,side<2?1.5:d2*0.6), emisMat(t.rim));
+        if (side<2) strip.position.set(x,(0.25+s2*0.25)*h, z+(z<WORLD_H/2? d2/2+1 : -d2/2-1));
+        else strip.position.set(x+(x<WORLD_W/2? w2/2+1 : -w2/2-1),(0.25+s2*0.25)*h, z);
+        root.add(strip);
+      }
+      if (hash2(i,67)>0.5){                      // antenna mast
+        const ant=new THREE.Mesh(new THREE.CylinderGeometry(1.6,2.4,54,6), metal);
+        ant.position.set(x,h+27,z); root.add(ant);
+      }
+    }
+    m.position.set(x, (t.style==="crystal"? h/2*0.9 : h/2), z);
+    root.add(m);
+    if (hash2(i,69)>0.35) beacon(x, h+(t.style==="crystal"?h*0.42:26), z, i%3?0xff4444:t.rim);
+  }
+  // ---- wall-top props (skip pillars that became columns/cones) ----
+  let wi=0;
+  for (const w of walls){
+    wi++;
+    const pil=isPillar(w);
+    if (pil && t.style!=="box"){ continue; }
+    const horiz=w.w>=w.h, len=Math.max(w.w,w.h), cx=w.x+w.w/2, cz=w.y+w.h/2;
+    if (pil){                                    // pillar: antenna mast + red aircraft light
+      if (hash2(wi,80)>0.55){
+        const ant=new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.8,44,6), metal);
+        ant.position.set(cx,wh+22,cz); root.add(ant);
+        beacon(cx,wh+46,cz,0xff5544,2.4);
+      }
+      continue;
+    }
+    if (len<150) continue;
+    const j=hash2(wi,82);
+    if (j>0.30){                                 // pipe run along the wall top, offset off-center
+      const pl=len-22, off=(hash2(wi,84)-0.5)*10;
+      const pipe=new THREE.Mesh(new THREE.CylinderGeometry(3.1,3.1,pl,8), metal);
+      pipe.rotation.z=horiz?Math.PI/2:0; if(!horiz) pipe.rotation.x=Math.PI/2;
+      pipe.position.set(cx+(horiz?0:off), wh+5, cz+(horiz?off:0)); root.add(pipe);
+      const nfl=Math.floor(pl/85);
+      for (let f2=1; f2<=nfl; f2++){             // flange collars
+        const fl=new THREE.Mesh(new THREE.CylinderGeometry(4.6,4.6,3,8), metal);
+        fl.rotation.copy(pipe.rotation);
+        const d3=-pl/2+f2*(pl/(nfl+1));
+        fl.position.set(pipe.position.x+(horiz?d3:0), wh+5, pipe.position.z+(horiz?0:d3)); root.add(fl);
+      }
+    }
+    if (j<0.42){                                 // vent unit with a spinning extraction fan
+      const vx=cx+(horiz?(hash2(wi,86)-0.5)*len*0.5:0), vz=cz+(horiz?0:(hash2(wi,86)-0.5)*len*0.5);
+      const housing=new THREE.Mesh(new THREE.CylinderGeometry(11,12,8,10), darkBody);
+      housing.position.set(vx,wh+4,vz); root.add(housing);
+      const fan=new THREE.Group();
+      for (let b2=0;b2<3;b2++){
+        const blade=new THREE.Mesh(new THREE.BoxGeometry(16,0.8,3.4), metal);
+        blade.rotation.y=b2*Math.PI*2/3; fan.add(blade);
+      }
+      fan.position.set(vx,wh+8.6,vz); root.add(fan);
+      gl.anim.fans.push({ m:fan, sp:(hash2(wi,88)>0.5?1:-1)*(2.4+hash2(wi,89)*3) });
+    }
+  }
+  // ---- hazard posts beside every door ----
+  let di=0;
+  for (const d of doorDefs){
+    di++;
+    const horiz=d.w>=d.h;
+    const px=d.x+(horiz?-6:d.w/2+6), pz=d.y+(horiz?d.h/2+6:-6);
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(1.6,2.0,22,6), metal);
+    post.position.set(px,11,pz); root.add(post);
+    const bulb=new THREE.Mesh(new THREE.SphereGeometry(2.6,8,8), emisMat(0xffb040));
+    bulb.position.set(px,24,pz); root.add(bulb);
+    beacon(px,24,pz,0xffb040,3.2);
+  }
+  // ---- breathing steam vents (4 per map, at deterministic wall ends) ----
+  const longWalls=walls.filter(w=>Math.max(w.w,w.h)>=180);
+  for (let v=0; v<Math.min(4,longWalls.length); v++){
+    const w=longWalls[Math.floor(hash2(v,91)*longWalls.length)];
+    const vx=w.x+(w.w>=w.h?12:w.w/2), vz=w.y+(w.w>=w.h?w.h/2:12);
+    const grate=new THREE.Mesh(new THREE.CylinderGeometry(7,8,3,8), darkBody);
+    grate.position.set(vx,1.6,vz); root.add(grate);
+    const puffs=[];
+    for (let pz2=0;pz2<3;pz2++){
+      const s=glowSprite(0xbfcbd8, 16); s.material.opacity=0; s.position.set(vx,4,vz); root.add(s);
+      puffs.push({ s, ph:pz2/3 });
+    }
+    gl.anim.steam.push({ puffs, x:vx, z:vz, y0:5, sp:0.28+hash2(v,93)*0.2 });
+  }
 }
 // Bake two world-sized overlay canvases from the wall layout (once per map build):
 //   AO    — soft dark halo hugging every wall base (normal blend). Grounds the architecture the way
@@ -2554,6 +2693,44 @@ function bakeGroundGI(t, root){
     sg.fillStyle=rgba2(rimHex,0.30); sg.fillRect(x-5,y-5,ww+10,wh2+10);
   }
   if (blurOK){ ag.filter="none"; sg.filter="none"; }
+  // ---- DECAL PASS (drawn into the same normal-blend overlay): the lived-in layer ----
+  // hazard stripes at every door crossing
+  let di2=0;
+  for (const d of doorDefs){
+    di2++;
+    const horiz=d.w>=d.h;
+    const zx=(d.x-(horiz?6:14))*sx, zy=(d.y-(horiz?14:6))*sy;
+    const zw=(d.w+(horiz?12:28))*sx, zh=(d.h+(horiz?28:12))*sy;
+    ag.save(); ag.beginPath(); ag.rect(zx,zy,zw,zh); ag.clip();
+    ag.translate(zx+zw/2,zy+zh/2); ag.rotate(Math.PI/4);
+    for (let s2=-12;s2<=12;s2++){
+      ag.fillStyle = s2%2 ? "rgba(255,190,50,0.14)" : "rgba(0,0,0,0.18)";
+      ag.fillRect(s2*7,-60,5,120);
+    }
+    ag.restore();
+  }
+  // oil stains + scorch marks scattered on open deck
+  for (let i2=0;i2<26;i2++){
+    const ox=hash2(i2,101)*SW, oy=hash2(i2,103)*SH, or2=6+hash2(i2,107)*22;
+    const g2=ag.createRadialGradient(ox,oy,0,ox,oy,or2);
+    const scorch=hash2(i2,109)>0.7;
+    g2.addColorStop(0,scorch?"rgba(10,6,4,0.42)":"rgba(6,8,10,0.30)");
+    g2.addColorStop(1,"rgba(0,0,0,0)");
+    ag.fillStyle=g2; ag.beginPath();
+    ag.ellipse(ox,oy,or2*(1+hash2(i2,113)*0.7),or2,hash2(i2,117)*3,0,Math.PI*2); ag.fill();
+  }
+  // painted deck markings: center operations circle + quadrant numerals, in worn theme paint
+  const paint=rgba2(t.seam,0.13), cxq=WORLD_W/2*sx, cyq=WORLD_H/2*sy;
+  ag.strokeStyle=paint; ag.lineWidth=3.5;
+  ag.beginPath(); ag.arc(cxq,cyq,80*sx,0,Math.PI*2); ag.stroke();
+  ag.beginPath(); ag.arc(cxq,cyq,96*sx,0,Math.PI*2); ag.stroke();
+  ag.font="700 "+Math.round(64*sx)+"px sans-serif"; ag.textAlign="center"; ag.textBaseline="middle";
+  ag.fillStyle=paint;
+  const qOff=250;
+  ag.fillText("01",(WORLD_W/2-qOff)*sx,(WORLD_H/2-qOff*0.7)*sy);
+  ag.fillText("02",(WORLD_W/2+qOff)*sx,(WORLD_H/2-qOff*0.7)*sy);
+  ag.fillText("03",(WORLD_W/2-qOff)*sx,(WORLD_H/2+qOff*0.7)*sy);
+  ag.fillText("04",(WORLD_W/2+qOff)*sx,(WORLD_H/2+qOff*0.7)*sy);
   const mkPlane=(cv,blend,op,yy)=>{
     const tx=new THREE.CanvasTexture(cv);
     const m=new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W,WORLD_H),
@@ -2744,6 +2921,16 @@ function renderWorld3D(){
       a[b3+1]=gl.dust.base[b3+1]+Math.sin(tt*0.22+ph*1.7)*7;
       a[b3+2]=gl.dust.base[b3+2]+Math.cos(tt*0.28+ph)*16; }
     gl.dust.points.geometry.attributes.position.needsUpdate=true; }
+  // ambient life: spinning fans, blinking beacons, breathing steam (registered by buildSetDressing)
+  if (gl.anim){ const tt=performance.now()/1000;
+    for (const f of gl.anim.fans) f.m.rotation.y=tt*f.sp;
+    for (const b of gl.anim.beacons) b.s.material.opacity=0.10+(Math.sin(tt*b.sp+b.ph)*0.5+0.5)*0.8;
+    for (const v of gl.anim.steam){ for (const pf of v.puffs){
+      const cyc=((tt*v.sp+pf.ph)%1);
+      pf.s.position.y=v.y0+cyc*44;
+      pf.s.material.opacity=Math.sin(cyc*Math.PI)*0.20;
+      pf.s.scale.setScalar(12+cyc*34); } }
+  }
   gl.playerLight.position.set(you.x, 130, you.y);
   const it=itIndex>=0?players[itIndex]:null;
   if (it){ gl.itLight.position.set(it.x,120,it.y); gl.itLight.intensity=2.2; } else gl.itLight.intensity=0;
@@ -2919,8 +3106,14 @@ function renderWorld3D(){
     gl.renderer.setRenderTarget(null);
     gl.deck.visible=true; gl.voidPlane.visible=true;
     if (gl.aoPlane) gl.aoPlane.visible=true; if (gl.spillPlane) gl.spillPlane.visible=true;
+    // blur the mirror into a rough-gloss SMEAR — a razor-sharp mirror image reads as a hole in the
+    // floor (Loren hit exactly that on Foundry); a soft smear reads as polished metal
+    const pb=gl.post.mBlur;
+    pb.uniforms.tScene.value=gl.post.refl.texture; pb.uniforms.uDir.value.set(1.4/gl.post.refl.width,0); postPass(pb,gl.post.reflB);
+    pb.uniforms.tScene.value=gl.post.reflB.texture; pb.uniforms.uDir.value.set(0,1.4/gl.post.refl.height); postPass(pb,gl.post.refl);
+    gl.renderer.setRenderTarget(null);
     dsh.uniforms.tRefl.value=gl.post.refl.texture;
-    dsh.uniforms.uReflStr.value=0.85;
+    dsh.uniforms.uReflStr.value=(mapTheme().refl!==undefined)?mapTheme().refl:0.5;
     dsh.uniforms.uReflRes.value.set(gl.postW||VIEW_W, gl.postH||VIEW_H);
   } else if (dsh){ dsh.uniforms.uReflStr.value=0; }
   // --- present: through the post chain when available (LOW tier renders direct) ---
