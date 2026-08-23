@@ -147,6 +147,9 @@
 </div>
 
 <script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="SkeletonUtils.js"></script>
+<script src="RGBELoader.js"></script>
 <script src="peerjs.min.js"></script>
 <script>
 "use strict";
@@ -2138,10 +2141,11 @@ function initGL(){
     gl.playerLight=new THREE.PointLight(0xcfe6ff, 1.6, 760, 2.0);   // no shadow (point-light shadows are the #1 cost)
     gl.scene.add(gl.playerLight);
     gl.itLight=new THREE.PointLight(0xff4030, 0.0, 520, 2.0); gl.scene.add(gl.itLight);
-    gl.envMap=makeEnvMap();                                // PMREM-filtered IBL cube (see makeEnvMap)
+    gl.envMap=makeEnvMap();                                // instant PMREM cube; loadEnvironment swaps in the real HDRI
     gl.scene.environment=gl.envMap;                        // every StandardMaterial gets image-based lighting for free
     gl.reflCam=new THREE.PerspectiveCamera(52, VIEW_W/VIEW_H, 1, 6000);   // mirrored camera for floor reflections
     gl.renderer.shadowMap.autoUpdate=false;                // shadows updated ONCE per frame (reflection pass reuses them)
+    loadEnvironment(); loadWorldTextures(); loadCharacter();   // real assets stream in and hot-swap
     buildStaticGL();
     gl.pool={ players:[], cores:[], banks:[], doors:[], cages:[], ghosts:[], blocks:[] };
     gl.renderScale=1; gl.ok=true;
@@ -2278,6 +2282,32 @@ function makeEnvMap(){
     const rt=pg.fromCubemap(tex); pg.dispose();
     return rt.texture;
   } catch(e){ console.warn("[env] PMREM unavailable — raw cube", e); return tex; }
+}
+// REAL HDRI environment (async): a scanned warehouse light probe replaces the hand-drawn cube once
+// it lands. PMREM'd for roughness-correct reflections; scene.environment swap re-lights everything
+// (no material rebuild needed — no material holds an explicit envMap anymore).
+function loadEnvironment(){
+  if (!(gl.ok && THREE.RGBELoader)) return;
+  try{
+    new THREE.RGBELoader().load("env.hdr", tex=>{
+      try{
+        const pg=new THREE.PMREMGenerator(gl.renderer); pg.compileEquirectangularShader();
+        const rt=pg.fromEquirectangular(tex); pg.dispose(); tex.dispose();
+        gl.envMap=rt.texture; gl.scene.environment=rt.texture;
+      }catch(e){ console.warn("[env] HDR PMREM failed — keeping cube", e); }
+    }, undefined, e=>console.warn("[env] hdr load failed — keeping cube", e));
+  }catch(e){ console.warn("[env] RGBE unavailable", e); }
+}
+// Scanned PBR wall maps (async): real diamond-plate normal + roughness (PolyHaven, CC0). The diffuse
+// stays a flat theme tint so each map keeps its exact palette. One static rebuild when both land.
+const TEX={ ready:false };
+function loadWorldTextures(){
+  if (typeof THREE==="undefined") return;
+  let n=0; const done=()=>{ if (++n===2){ TEX.ready=true; if (gl.ok) buildStaticGL(); } };
+  const tl=new THREE.TextureLoader();
+  TEX.wallNor=tl.load("wall_nor.jpg", done, undefined, e=>console.warn("[tex] wall_nor failed", e));
+  TEX.wallRough=tl.load("wall_rough.jpg", done, undefined, e=>console.warn("[tex] wall_rough failed", e));
+  for (const t of [TEX.wallNor, TEX.wallRough]){ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1/220,1/220); }
 }
 // Re-tint the whole scene (background, fog, lights) to the active map's palette. Cheap; safe to call
 // on every map switch. Kept separate so buildStaticGL and any live theme change share one path.
@@ -2433,14 +2463,16 @@ function buildStaticGL(){
   //   columns     -> molten cylinder + a glowing top ring
   //   crystals    -> faceted cone + edge glints (the one style where wireframe reads as facets)
   const wh=G.wallH*(t.wallH||1);
-  if (!gl.detailNormal) gl.detailNormal=makeDetailNormal();      // shared subtle surface-noise normal (built once)
+  if (!gl.detailNormal) gl.detailNormal=makeDetailNormal();      // fallback until the scanned maps land
   const wallMat=new THREE.MeshStandardMaterial({ color:t.wall, emissive:t.wallEmis||0x000000, emissiveIntensity:t.wallEmisInt||0,
-    roughness:0.5, metalness:0.55, envMap:gl.envMap||null, envMapIntensity:0.6,
-    normalMap:gl.detailNormal, normalScale:new THREE.Vector2(0.4,0.4) });
+    metalness:0.55, envMapIntensity:0.6,
+    normalMap:TEX.ready?TEX.wallNor:gl.detailNormal,
+    normalScale:TEX.ready?new THREE.Vector2(0.7,0.7):new THREE.Vector2(0.4,0.4),
+    roughnessMap:TEX.ready?TEX.wallRough:null, roughness:TEX.ready?1.0:0.5 });
   const wallMatB=wallMat.clone(); wallMatB.color.multiplyScalar(1.22);          // subtle tonal alternation
   const trimMat=new THREE.MeshStandardMaterial({ color:t.rim, emissive:t.rim, emissiveIntensity:1.7, roughness:0.35, metalness:0.2 });
   const trimMatB=(t.rim2&&t.rim2!==t.rim)?trimMat.clone():trimMat; if (trimMatB!==trimMat){ trimMatB.color.setHex(t.rim2); trimMatB.emissive.setHex(t.rim2); }
-  deckMat.envMap=gl.envMap||null; deckMat.envMapIntensity=0.55;
+  deckMat.envMapIntensity=0.55;                                  // envMap itself comes from scene.environment
   // chamfered slab: an extruded rounded-rect with a real bevel, so wall edges CATCH LIGHT the way
   // machined metal does — the single biggest "this is real geometry" tell vs. raw boxes
   const bevelBox=(bw,bh,bd)=>{
@@ -2626,16 +2658,69 @@ function buildWardenRig(){
   return { group:g, body, accent };
 }
 
+// ============================================================
+// CHARACTER ASSETS — a real skeletal-animated glTF character (RobotExpressive, CC0/public-domain)
+// replaces the primitive-solid rigs: actual idle/run animations instead of gliding statues.
+// Loaded async at boot; until it lands (or if it ever fails) the old built-up rigs render, then the
+// pool hot-swaps. Class identity = proportions (CHAR_SCALE) + the existing accent colors/rings.
+// ============================================================
+const CHAR={ ready:false, scene:null, clips:null, height:1, minY:0 };
+const CHAR_SCALE={ striker:{w:0.94,h:1.06}, bulwark:{w:1.36,h:0.90}, warden:{w:0.94,h:1.22} };
+function loadCharacter(){
+  if (typeof THREE==="undefined" || !THREE.GLTFLoader) return;
+  new THREE.GLTFLoader().load("RobotExpressive.glb", g=>{
+    CHAR.scene=g.scene; CHAR.clips=g.animations;
+    const bb=new THREE.Box3().setFromObject(g.scene);
+    CHAR.height=(bb.max.y-bb.min.y)||1; CHAR.minY=bb.min.y;
+    CHAR.ready=true;
+    // hot-swap: retire the primitive pool so the next frame rebuilds with the real model
+    if (gl.ok && gl.pool){ for (const o of gl.pool.players) gl.scene.remove(o.root); gl.pool.players.length=0; }
+    if (menuGL && menuGL.rig){ menuGL.holder.remove(menuGL.rig.group); menuGL.rig=null; menuGL.cls=null; }
+  }, undefined, e=>console.warn("[char] glb load failed — primitive rigs", e));
+}
+function clipByName(n){ for (const c of (CHAR.clips||[])) if (c.name===n) return c; return null; }
+// One robot instance: SkeletonUtils.clone (a plain .clone() breaks SkinnedMesh bone bindings),
+// per-instance material clones bucketed for tinting, and its own AnimationMixer.
+function buildRobotRig(){
+  const obj=THREE.SkeletonUtils.clone(CHAR.scene);
+  obj.position.y=-CHAR.minY;                   // feet exactly on the deck
+  const body=[], accent=[];
+  obj.traverse(n=>{ if (n.isMesh){ n.castShadow=true;
+    const mats=Array.isArray(n.material)?n.material.map(m=>m.clone()):n.material.clone();
+    n.material=mats;
+    (Array.isArray(mats)?mats:[mats]).forEach(m=>{
+      if (/main/i.test(m.name)) body.push(m);
+      else if (/grey|gray/i.test(m.name)){ m.userData.baseInt=0.25; accent.push(m); }
+    });
+  }});
+  const mixer=new THREE.AnimationMixer(obj);
+  const mk=n2=>{ const c=clipByName(n2); return c?mixer.clipAction(c):null; };
+  const act={ idle:mk("Idle"), run:mk("Running"), punch:mk("Punch") };
+  if (act.idle) act.idle.play();
+  if (act.punch){ act.punch.setLoop(THREE.LoopOnce,1); }
+  const group=new THREE.Group(); group.add(obj);
+  return { group, obj, body, accent, mixer, act, mode:"idle", punchT:0 };
+}
 function makePlayerMesh(){
   const root=new THREE.Group();
-  const rigs={ striker:buildStrikerRig(), bulwark:buildBulwarkRig(), warden:buildWardenRig() };
-  for (const k in rigs){ rigs[k].group.visible=false; root.add(rigs[k].group); }
+  let out;
+  if (CHAR.ready){
+    const robot=buildRobotRig(); root.add(robot.group);
+    out={ root, robot, cls:null };
+  } else {
+    const rigs={ striker:buildStrikerRig(), bulwark:buildBulwarkRig(), warden:buildWardenRig() };
+    for (const k in rigs){ rigs[k].group.visible=false; root.add(rigs[k].group); }
+    out={ root, rigs, cls:null };
+  }
   const glow=glowSprite(0xffffff, 58); glow.position.y=17; root.add(glow);
   root.add(shadowBlob(52));                    // contact shadow (independent of the shadow-map quality tier)
-  return { root, rigs, glow, cls:null };
+  out.glow=glow;
+  return out;
 }
 function renderWorld3D(){
   const you=players[0];
+  // animation clock (mixers need real dt; render has no sim-dt in the client path)
+  const nowMs=performance.now(); gl.charDt=Math.min(0.05,(nowMs-(gl.lastMs||nowMs))/1000); gl.lastMs=nowMs;
   // camera: 3/4 chase with critically-damped smoothing (no hard lock) + a dash FOV punch.
   // The lag is tiny (~80ms) but it makes motion read as filmed rather than clamped.
   // trauma-style shake: intensity^2 drives a smooth 2-frequency sine wobble — reads as an impact
@@ -2643,7 +2728,7 @@ function renderWorld3D(){
   const tr=Math.pow(effects.shake/16,2), st=performance.now()/1000;
   const jx=(Math.sin(st*27.3)*0.6+Math.sin(st*41.7+1.3)*0.4)*tr*26;
   const jz=(Math.sin(st*31.1+2.1)*0.6+Math.sin(st*38.3)*0.4)*tr*26;
-  const camH=480, camBack=360;
+  const camH=445, camBack=335;                               // pulled in a touch for the real characters (was 480/360)
   if (!gl.camT) gl.camT={x:you.x, z:you.y, fov:52};
   const k=1-Math.exp(-0.016*14);                             // frame-rate-stable smoothing factor
   gl.camT.x+=(you.x-gl.camT.x)*k; gl.camT.z+=(you.y-gl.camT.z)*k;
@@ -2671,13 +2756,34 @@ function renderWorld3D(){
   shown.forEach((p,i)=>{
     const o=gl.pool.players[i]; o.root.position.set(p.x,0,p.y); o.root.rotation.y=-p.heading+Math.PI/2;
     const acc=clsById(p.cls).accent, accN=parseInt(acc.slice(1),16), colN=parseInt((p.color||acc).slice(1),16);
-    // swap to this player's class rig (only when it changes — pool slots get reused across matches)
-    if (o.cls!==p.cls){ for (const k in o.rigs) o.rigs[k].group.visible=(k===p.cls); o.cls=p.cls; }
-    const rig=o.rigs[p.cls]||o.rigs.striker;
     const bodyN=p.isIt?0xff4a3a:colN, emN=p.isIt?0x551008:accN, trimN=p.isIt?0xff5a48:accN;
-    rig.body.forEach(m=>{ m.color.setHex(bodyN); m.emissive.setHex(emN); m.emissiveIntensity=p.isIt?0.85:0.3; });
-    const flash=(p.shoveT>0)?(1+3.2*(p.shoveT/0.34)):1;              // whole chassis pulses bright as it shoves
-    rig.accent.forEach(m=>{ m.color.setHex(trimN); m.emissive.setHex(trimN); m.emissiveIntensity=(m.userData.baseInt||1.5)*flash; });
+    if (o.robot){
+      const r=o.robot;
+      if (o.cls!==p.cls){ const s=CHAR_SCALE[p.cls]||CHAR_SCALE.striker, g2=46/CHAR.height;
+        r.group.scale.set(s.w*g2, s.h*g2, s.w*g2); o.cls=p.cls; }
+      r.body.forEach(m=>{ m.color.setHex(bodyN); m.emissive.setHex(emN); m.emissiveIntensity=p.isIt?0.6:0.18; });
+      const flash=(p.shoveT>0)?(0.4+1.8*(p.shoveT/0.34)):0;
+      r.accent.forEach(m=>{ m.emissive.setHex(trimN); m.emissiveIntensity=flash; });
+      // animation state: run vs idle from actual speed; dashing cranks the run cycle
+      const sp=(p.speed!==undefined)?p.speed:Math.hypot(p.vx||0,p.vy||0);
+      const dashing=!!(p.dash&&p.dash.t>0);
+      const want=(sp>40||dashing)?"run":"idle";
+      if (r.act.run && r.act.idle){
+        if (want!==r.mode){ const from=r.act[r.mode], to=r.act[want];
+          to.enabled=true; to.reset().play(); if (from) from.crossFadeTo(to,0.16,false); r.mode=want; }
+        if (want==="run") r.act.run.timeScale = dashing?2.6:Math.max(0.7,Math.min(2.1,sp/170));
+      }
+      if (r.act.punch && p.shoveT>0.3 && r.punchT<=0){ r.act.punch.reset().play(); r.punchT=0.6; }
+      if (r.punchT>0) r.punchT-=gl.charDt;
+      r.mixer.update(gl.charDt);
+    } else {
+      // legacy primitive rigs (model still loading, or its load failed)
+      if (o.cls!==p.cls){ for (const k in o.rigs) o.rigs[k].group.visible=(k===p.cls); o.cls=p.cls; }
+      const rig=o.rigs[p.cls]||o.rigs.striker;
+      rig.body.forEach(m=>{ m.color.setHex(bodyN); m.emissive.setHex(emN); m.emissiveIntensity=p.isIt?0.85:0.3; });
+      const flash=(p.shoveT>0)?(1+3.2*(p.shoveT/0.34)):1;            // whole chassis pulses bright as it shoves
+      rig.accent.forEach(m=>{ m.color.setHex(trimN); m.emissive.setHex(trimN); m.emissiveIntensity=(m.userData.baseInt||1.5)*flash; });
+    }
     o.glow.material.color.setHex(p.carrying?0xffcf6a:(p.isIt?0xff5040:accN));
     o.glow.material.opacity=p.carrying?0.42:(p.isIt?0.65:0.32);   // carry glow dimmed so the charge ring above the body reads
     o.glow.scale.setScalar(p.carrying?52:(p.isIt?76:52));
@@ -3588,15 +3694,25 @@ function initMenuGL(){
 }
 function menuPreview3D(){
   const m=initMenuGL(); if (!m) return false;
-  if (m.cls!==custom.cls){
+  if (m.cls!==custom.cls || (CHAR.ready && !m.robot)){
     if (m.rig) m.holder.remove(m.rig.group);
-    m.rig = custom.cls==="bulwark"?buildBulwarkRig() : custom.cls==="warden"?buildWardenRig() : buildStrikerRig();
+    if (CHAR.ready){
+      m.rig=buildRobotRig(); m.robot=true;
+      const s=CHAR_SCALE[custom.cls]||CHAR_SCALE.striker, g2=40/CHAR.height;
+      m.rig.group.scale.set(s.w*g2, s.h*g2, s.w*g2);
+      m.rig.group.position.y=4;
+      const wv=clipByName("Wave");                     // charming turntable pose: waving at you
+      if (wv && m.rig.act.idle){ m.rig.act.idle.stop(); m.rig.mixer.clipAction(wv).play(); }
+    } else {
+      m.rig = custom.cls==="bulwark"?buildBulwarkRig() : custom.cls==="warden"?buildWardenRig() : buildStrikerRig();
+    }
     m.holder.add(m.rig.group); m.cls=custom.cls;
   }
   const accN=parseInt(clsById(custom.cls).accent.slice(1),16);
   const colN=parseInt((custom.color||clsById(custom.cls).accent).slice(1),16);
-  m.rig.body.forEach(mat=>{ mat.color.setHex(colN); mat.emissive.setHex(accN); mat.emissiveIntensity=0.3; });
-  m.rig.accent.forEach(mat=>{ mat.color.setHex(accN); mat.emissive.setHex(accN); mat.emissiveIntensity=mat.userData.baseInt||1.5; });
+  m.rig.body.forEach(mat=>{ mat.color.setHex(colN); mat.emissive.setHex(accN); mat.emissiveIntensity=m.robot?0.15:0.3; });
+  m.rig.accent.forEach(mat=>{ mat.color.setHex(accN); mat.emissive.setHex(accN); mat.emissiveIntensity=m.robot?0.2:(mat.userData.baseInt||1.5); });
+  if (m.rig.mixer){ const n2=performance.now(); m.rig.mixer.update(Math.min(0.05,(n2-(m.lastT||n2))/1000)); m.lastT=n2; }
   m.holder.rotation.y = performance.now()/1500;       // slow turntable so you see the whole silhouette
   m.rnd.render(m.scene, m.cam);
   return true;
