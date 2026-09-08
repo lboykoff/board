@@ -100,9 +100,9 @@ The starter rules are open. To lock the board to just you + Claude:
   a token, then sends it as a Bearer header on the Firestore calls.
 Deferred for v1 — the data here is low-sensitivity task titles.
 
-## Facts (`/facts/`)
+## Diary (`/facts/`)
 
-A second tiny PWA in this repo: a chat-style log of interesting facts, live at
+A second tiny PWA in this repo (Loren's home-screen name: **Diary**): a chat-style log of interesting facts and quotes, live at
 `https://lboykoff.github.io/board/facts/`. Same Firebase project and sign-in as Board.
 
 - Type a line or paste a link, tap **Log**. The raw note saves at once.
@@ -120,7 +120,7 @@ Firestore collection `facts`, one document per fact:
 |---|---|
 | `raw` | what was typed, untouched |
 | `fact` | the cleaned sentences ("" until cleaned) |
-| `tag` | science · space · history · people · tech · body · money · nature · words · culture · me · other |
+| `tag` | science · space · history · people · tech · body · money · nature · words · culture · quote · me · other |
 | `note` | caveat, or "" |
 | `url`, `title` | source link and its title (from noembed), or "" |
 | `status` | `raw` · `done` |

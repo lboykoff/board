@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0f1115" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Facts" />
-<title>Facts</title>
+<meta name="apple-mobile-web-app-title" content="Diary" />
+<title>Diary</title>
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="apple-touch-icon" href="icon.png" />
 <style>
@@ -116,7 +116,7 @@
 <body>
 <div class="app">
   <header>
-    <h1>Facts<span class="n" id="count"></span></h1>
+    <h1>Diary<span class="n" id="count"></span></h1>
     <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
     <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
   </header>
@@ -177,7 +177,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "244714197042",
   appId: "1:244714197042:web:aabdbaa3d2da3a2db26c2b"
 };
-const TAGS = ["science", "space", "history", "people", "tech", "body", "money", "nature", "words", "culture", "me", "other"];
+const TAGS = ["science", "space", "history", "people", "tech", "body", "money", "nature", "words", "culture", "quote", "me", "other"];
 const MODEL = "claude-opus-5";
 
 /* ---- State ---- */
@@ -313,6 +313,7 @@ Rules:
 - Do not add details the note does not support, except one well-known piece of context if it makes the fact clearer.
 - If the note is only a link and a title, write the fact from the title carefully, and say in the note that it was inferred from the title.
 - If the fact is a common myth, contested, or a leading theory rather than settled, say so briefly in the note. Otherwise leave the note empty.
+- If the note is a quotation, keep the words exactly as given. Do not rewrite a quote. Put the speaker or source in the note, and tag it "quote".
 - Choose the single best tag. Use "me" only for facts about the person themself.`;
 
 async function enrich(f) {

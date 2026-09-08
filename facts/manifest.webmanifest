@@ -1,7 +1,7 @@
 {
-  "name": "Facts",
-  "short_name": "Facts",
-  "description": "A log of interesting facts, cleaned up by Claude.",
+  "name": "Diary",
+  "short_name": "Diary",
+  "description": "Loren's diary of facts and quotes, cleaned up by Claude.",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0f1115",
