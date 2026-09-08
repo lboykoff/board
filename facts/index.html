@@ -139,6 +139,7 @@
     <input type="email" id="email" placeholder="Email" autocomplete="username" />
     <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
     <button type="submit" id="loginBtn">Sign in</button>
+    <button type="button" class="ghost" id="forgotBtn">Forgot password</button>
     <div class="msg" id="loginMsg"></div>
   </form>
 </div>
@@ -458,6 +459,12 @@ async function initSync() {
       try { await authMod.signInWithEmailAndPassword(auth, email, pw); }
       catch (err) { msg.textContent = err.code === "auth/invalid-credential" ? "Wrong email or password." : (err.code || "Sign-in failed."); }
       finally { btn.disabled = false; }
+    });
+    $("#forgotBtn").addEventListener("click", async () => {
+      const email = $("#email").value.trim(), msg = $("#loginMsg");
+      if (!email) { msg.textContent = "Type your email first."; return; }
+      try { await authMod.sendPasswordResetEmail(auth, email); msg.textContent = "Reset email sent. Check " + email + "."; }
+      catch (err) { msg.textContent = err.code || "Could not send."; }
     });
   } catch (err) { console.warn("Firebase unavailable:", err); setStatus("local"); }
 }
