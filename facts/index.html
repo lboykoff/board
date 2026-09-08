@@ -60,6 +60,9 @@
   .card.raw .fact { color: var(--muted); }
   .card.hi { border-left-color: var(--green); background: #38d39f0d; }
   .card.mine { border-left-color: var(--accent); }
+  .card.quote { border-left-color: #c084fc; }
+  .card.quote .pill { background: #c084fc1f; color: #c084fc; }
+  .card.quote .fact { font-style: italic; }
   @keyframes pop { from { transform: translateY(4px); opacity: .3; } to { transform: none; opacity: 1; } }
   .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .date { font-size: 11px; color: var(--muted); }
@@ -177,7 +180,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "244714197042",
   appId: "1:244714197042:web:aabdbaa3d2da3a2db26c2b"
 };
-const TAGS = ["science", "space", "history", "people", "tech", "body", "money", "nature", "words", "culture", "quote", "me", "other"];
+const TAGS = ["science", "space", "history", "people", "tech", "body", "money", "nature", "words", "culture", "quote", "diary", "me", "other"];
 const MODEL = "claude-opus-5";
 
 /* ---- State ---- */
@@ -247,7 +250,7 @@ function render(scroll = false) {
 function cardEl(f, hi = false) {
   const d = document.createElement("div");
   const raw = f.status !== "done";
-  d.className = `card${raw ? " raw" : ""}${hi ? " hi" : ""}${f.tag === "me" ? " mine" : ""}${open.has(f.id) && !hi ? " open" : ""}`;
+  d.className = `card${raw ? " raw" : ""}${hi ? " hi" : ""}${f.tag === "me" || f.tag === "diary" ? " mine" : ""}${f.tag === "quote" ? " quote" : ""}${open.has(f.id) && !hi ? " open" : ""}`;
   d.dataset.id = f.id;
   const text = raw ? f.raw : (f.fact || f.raw);
   const pend = busy.has(f.id) ? `<span class="pending">cleaning up…</span>`
@@ -263,6 +266,7 @@ function cardEl(f, hi = false) {
     ${f.url ? `<div class="src"><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || f.url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a></div>` : ""}
     <div class="actions">
       <button data-act="edit">edit</button>
+      <button data-act="date">date</button>
       <button data-act="clean">clean up</button>
       ${raw ? "" : `<button data-act="showraw">original</button>`}
       <button data-act="del" class="danger">delete</button>
@@ -314,6 +318,7 @@ Rules:
 - If the note is only a link and a title, write the fact from the title carefully, and say in the note that it was inferred from the title.
 - If the fact is a common myth, contested, or a leading theory rather than settled, say so briefly in the note. Otherwise leave the note empty.
 - If the note is a quotation, keep the words exactly as given. Do not rewrite a quote. Put the speaker or source in the note, and tag it "quote".
+- If the note is the person's own reflection, poem, or diary passage, keep it verbatim too and tag it "diary".
 - Choose the single best tag. Use "me" only for facts about the person themself.`;
 
 async function enrich(f) {
@@ -396,6 +401,11 @@ listEl.addEventListener("click", async (e) => {
   if (act === "open") { if (card.classList.contains("hi")) { randomId = null; render(); return; } open.has(id) ? open.delete(id) : open.add(id); card.classList.toggle("open"); }
   else if (act === "tag") { const i = TAGS.indexOf(f.tag); await patch(id, { tag: TAGS[(i + 1) % TAGS.length] }); }
   else if (act === "edit") { const v = prompt("Edit fact", f.status === "done" ? f.fact : f.raw); if (v !== null && v.trim()) await patch(id, f.status === "done" ? { fact: v.trim() } : { raw: v.trim() }); }
+  else if (act === "date") {
+    const cur = new Date(f.createdAt).toISOString().slice(0, 10);
+    const v = prompt("Entry date (YYYY-MM-DD)", cur);
+    if (v !== null) { const t = Date.parse(v.trim() + "T12:00:00"); if (isNaN(t)) { toast("Bad date"); } else await patch(id, { createdAt: t }); }
+  }
   else if (act === "clean") { if (!getKey()) { toast("Add an API key in ⚙ first"); return; } enrich(f); }
   else if (act === "showraw") { alert("You typed:\n\n" + f.raw); }
   else if (act === "del") { if (confirm("Delete this fact?")) { open.delete(id); await remove(id); } }
