@@ -99,3 +99,33 @@ The starter rules are open. To lock the board to just you + Claude:
 - App signs in on load; Claude authenticates via the Identity Toolkit REST endpoint to get
   a token, then sends it as a Bearer header on the Firestore calls.
 Deferred for v1 — the data here is low-sensitivity task titles.
+
+## Facts (`/facts/`)
+
+A second tiny PWA in this repo: a chat-style log of interesting facts, live at
+`https://lboykoff.github.io/board/facts/`. Same Firebase project and sign-in as Board.
+
+- Type a line or paste a link, tap **Log**. The raw note saves at once.
+- With an Anthropic API key saved in ⚙ (stored only in that browser), the page calls Claude
+  straight from the browser, cleans the note into one to three sentences, tags it, and adds a
+  caveat when the fact is contested. Without a key, the fact stays `raw` and Claude tidies it
+  later from a Claude Code session (`~/.claude/facts.sh raw` / `done`).
+- 🎲 shows a random fact. Search and tag chips filter the list.
+- Share-in: open `/facts/?q=<text>` to prefill, or `/facts/?q=<text>&go=1` to log at once.
+  An iOS Shortcut can pass a shared YouTube link this way.
+
+Firestore collection `facts`, one document per fact:
+
+| field | values |
+|---|---|
+| `raw` | what was typed, untouched |
+| `fact` | the cleaned sentences ("" until cleaned) |
+| `tag` | science · space · history · people · tech · body · money · nature · words · culture · me · other |
+| `note` | caveat, or "" |
+| `url`, `title` | source link and its title (from noembed), or "" |
+| `status` | `raw` · `done` |
+| `source` | `loren` · `claude` |
+| `createdAt`, `updatedAt` | epoch ms |
+
+Rules: add a `match /facts/{id}` block with the same auth check as `tasks`.
+The root `sw.js` never caches `/facts/` (same bypass as `/cull/`).

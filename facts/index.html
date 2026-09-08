@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Facts" />
+<title>Facts</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon.png" />
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --text: #e7eaf0; --muted: #8a92a6;
+    --accent: #4f8cff; --accent-2: #2f6fe0; --amber: #f0b429; --green: #38d39f; --danger: #ff5d6c; --border: #262b36;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex; justify-content: center; overflow: hidden;
+  }
+  .app { width: 100%; max-width: 620px; height: 100dvh; display: flex; flex-direction: column; }
+
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: max(14px, env(safe-area-inset-top)) 16px 8px;
+  }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+  h1 .n { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #5b6478; }
+  .dot.live { background: var(--green); box-shadow: 0 0 8px #38d39f88; }
+  .dot.local { background: var(--amber); }
+  .dot.connecting { background: var(--accent); }
+  .icon-btn { background: transparent; color: var(--muted); border: none; font-size: 18px; padding: 4px 6px; cursor: pointer; border-radius: 8px; }
+  .icon-btn:active { background: var(--panel-2); }
+
+  .tools { display: flex; gap: 8px; padding: 0 16px 8px; align-items: center; }
+  .tools input {
+    flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    font-size: 15px; padding: 9px 12px; border-radius: 10px; outline: none; min-width: 0;
+  }
+  .tools input:focus { border-color: var(--accent); }
+  .tools button { background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 15px; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+  .tools button.on { border-color: var(--amber); color: var(--amber); }
+  .tags { display: flex; gap: 6px; padding: 0 16px 8px; overflow-x: auto; scrollbar-width: none; }
+  .tags::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; font-size: 12px; padding: 4px 10px; border-radius: 20px; background: var(--panel-2); color: var(--muted); cursor: pointer; border: 1px solid transparent; }
+  .chip.on { color: var(--amber); border-color: var(--amber); background: #f0b4291a; }
+
+  main { flex: 1; overflow-y: auto; padding: 4px 16px 12px; -webkit-overflow-scrolling: touch; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 8px; animation: pop .15s ease; border-left: 3px solid var(--amber);
+  }
+  .card.raw { border-left-color: var(--muted); }
+  .card.raw .fact { color: var(--muted); }
+  .card.hi { border-left-color: var(--green); background: #38d39f0d; }
+  .card.mine { border-left-color: var(--accent); }
+  @keyframes pop { from { transform: translateY(4px); opacity: .3; } to { transform: none; opacity: 1; } }
+  .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .date { font-size: 11px; color: var(--muted); }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #f0b4291f; color: var(--amber); cursor: pointer; }
+  .card.raw .pill { background: var(--panel-2); color: var(--muted); }
+  .top .spacer { flex: 1; }
+  .fact { font-size: 15px; line-height: 1.45; word-break: break-word; white-space: pre-wrap; cursor: pointer; }
+  .note { font-size: 12.5px; color: var(--muted); font-style: italic; margin-top: 6px; line-height: 1.4; }
+  .src { font-size: 12px; margin-top: 6px; }
+  .src a { color: var(--accent); text-decoration: none; }
+  .pending { font-size: 11px; color: var(--muted); }
+  .pending.err { color: var(--danger); }
+  .actions { display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .card.open .actions { display: flex; }
+  .actions button { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+  .actions button.danger { color: var(--danger); }
+  .empty { text-align: center; color: var(--muted); margin-top: 60px; font-size: 15px; line-height: 1.6; }
+  .thinking { font-size: 12px; color: var(--muted); padding: 2px 4px 8px; }
+  .thinking span { display: inline-block; animation: blink 1.2s infinite; }
+  @keyframes blink { 0%, 100% { opacity: .3 } 50% { opacity: 1 } }
+
+  form.composer {
+    display: flex; gap: 8px; align-items: flex-end; padding: 8px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border); background: var(--bg);
+  }
+  textarea {
+    flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    font-size: 16px; padding: 12px 14px; border-radius: 14px; outline: none; resize: none;
+    font-family: inherit; line-height: 1.4; max-height: 160px; min-height: 46px;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .send { border: none; cursor: pointer; font-size: 15px; border-radius: 14px; color: white; background: var(--accent); padding: 0 16px; height: 46px; font-weight: 600; }
+  .send:active { background: var(--accent-2); }
+  .send:disabled { opacity: .5; }
+
+  .overlay {
+    position: fixed; inset: 0; background: #0f1115ee; display: none; align-items: center; justify-content: center; padding: 20px; z-index: 10;
+  }
+  .overlay .box { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .overlay h2 { margin: 0 0 4px; font-size: 18px; }
+  .overlay p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .overlay input { background: var(--bg); border: 1px solid var(--border); color: var(--text); font-size: 16px; padding: 12px; border-radius: 10px; outline: none; width: 100%; }
+  .overlay input:focus { border-color: var(--accent); }
+  .overlay button { border: none; cursor: pointer; font-size: 15px; border-radius: 10px; color: white; background: var(--accent); padding: 12px; font-weight: 600; }
+  .overlay button.ghost { background: var(--panel-2); color: var(--muted); }
+  .overlay .row { display: flex; gap: 8px; }
+  .overlay .row button { flex: 1; }
+  .msg { font-size: 12px; color: var(--muted); min-height: 16px; }
+
+  .toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 13px; padding: 8px 14px; border-radius: 20px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Facts<span class="n" id="count"></span></h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+    <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
+  </header>
+  <div class="tools">
+    <input type="search" id="search" placeholder="Search facts" autocomplete="off" />
+    <button id="randomBtn" title="Random fact">🎲</button>
+  </div>
+  <div class="tags" id="tags"></div>
+  <main id="list"></main>
+  <form class="composer" id="composer">
+    <textarea id="input" rows="1" placeholder="What did you learn?" autocomplete="off"></textarea>
+    <button type="submit" class="send" id="sendBtn">Log</button>
+  </form>
+</div>
+
+<div class="overlay" id="login">
+  <form class="box" id="loginForm">
+    <h2>Sign in</h2>
+    <p>Same account as Board.</p>
+    <input type="email" id="email" placeholder="Email" autocomplete="username" />
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
+    <button type="submit" id="loginBtn">Sign in</button>
+    <div class="msg" id="loginMsg"></div>
+  </form>
+</div>
+
+<div class="overlay" id="settings">
+  <div class="box">
+    <h2>Settings</h2>
+    <p><b>Anthropic API key.</b> Stored only in this browser. With a key, each fact gets cleaned and tagged a few seconds after you log it. Without one, facts save raw and Claude tidies them later.</p>
+    <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" />
+    <div class="row">
+      <button id="saveKey">Save</button>
+      <button class="ghost" id="testKey">Test</button>
+      <button class="ghost" id="clearKey">Clear</button>
+    </div>
+    <div class="msg" id="keyMsg"></div>
+    <p id="rawCount"></p>
+    <div class="row">
+      <button class="ghost" id="cleanRaw">Clean up raw facts</button>
+      <button class="ghost" id="signOut">Sign out</button>
+    </div>
+    <button class="ghost" id="closeSettings">Close</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ---------------------------------------------------------------
+   CONFIG — same Firebase project as Board.
+   --------------------------------------------------------------- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBA0Q_PNmADqa8rEQmZgFV2HSLWvndA5SE",
+  authDomain: "loren-board.firebaseapp.com",
+  projectId: "loren-board",
+  storageBucket: "loren-board.firebasestorage.app",
+  messagingSenderId: "244714197042",
+  appId: "1:244714197042:web:aabdbaa3d2da3a2db26c2b"
+};
+const TAGS = ["science", "space", "history", "people", "tech", "body", "money", "nature", "words", "culture", "me", "other"];
+const MODEL = "claude-opus-5";
+
+/* ---- State ---- */
+let facts = [];               // [{id, raw, fact, tag, note, title, url, status, source, createdAt, updatedAt}]
+let db = null, fs = null, auth = null, authMod = null, snapStarted = false;
+let filterTag = "", query = "", randomId = null;
+const open = new Set();
+const busy = new Set();       // ids being enriched right now
+const $ = (s) => document.querySelector(s);
+const listEl = $("#list"), inputEl = $("#input"), dotEl = $("#dot"), statusText = $("#statusText");
+
+/* ---- Local cache (read-only fallback) ---- */
+function loadLocal() { try { facts = JSON.parse(localStorage.getItem("facts.cache") || "[]"); } catch { facts = []; } }
+function saveLocal() { try { localStorage.setItem("facts.cache", JSON.stringify(facts)); } catch {} }
+function getKey() { try { return localStorage.getItem("facts.apiKey") || ""; } catch { return ""; } }
+
+/* ---- Helpers ---- */
+const newId = () => "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtDate = (ms) => { const d = new Date(ms); return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" }); };
+const synced = () => !!(db && auth && auth.currentUser);
+function toast(msg, ms = 2200) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms); }
+function splitUrl(text) {
+  const m = text.match(/https?:\/\/\S+/);
+  if (!m) return { url: "", text: text.trim() };
+  return { url: m[0].replace(/[),.]+$/, ""), text: text.replace(m[0], "").trim() };
+}
+async function fetchTitle(url) {
+  if (!url) return "";
+  try {
+    const r = await fetch("https://noembed.com/embed?url=" + encodeURIComponent(url));
+    const j = await r.json();
+    return j.title ? (j.author_name ? `${j.title} (${j.author_name})` : j.title) : "";
+  } catch { return ""; }
+}
+
+/* ---- Render ---- */
+function visible() {
+  const q = query.toLowerCase();
+  return facts
+    .filter(f => !filterTag || f.tag === filterTag)
+    .filter(f => !q || [f.fact, f.raw, f.note, f.title, f.tag].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+function renderTags() {
+  const counts = {};
+  for (const f of facts) counts[f.tag || "other"] = (counts[f.tag || "other"] || 0) + 1;
+  const used = TAGS.filter(t => counts[t]);
+  $("#tags").innerHTML = used.map(t => `<span class="chip${filterTag === t ? " on" : ""}" data-tag="${t}">${t} ${counts[t]}</span>`).join("");
+}
+function render(scroll = false) {
+  const atBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 40;
+  const items = visible();
+  $("#count").textContent = facts.length ? facts.length : "";
+  renderTags();
+  listEl.innerHTML = "";
+  if (!items.length) {
+    listEl.innerHTML = `<div class="empty">${facts.length ? "Nothing matches." : "Log the first thing you learn.<br>Paste a link, type a line, or tap the mic."}</div>`;
+  }
+  for (const f of items) listEl.appendChild(cardEl(f));
+  if (randomId) {
+    const f = facts.find(x => x.id === randomId);
+    if (f) { const c = cardEl(f, true); listEl.appendChild(c); }
+  }
+  if (scroll || atBottom) listEl.scrollTop = listEl.scrollHeight;
+}
+function cardEl(f, hi = false) {
+  const d = document.createElement("div");
+  const raw = f.status !== "done";
+  d.className = `card${raw ? " raw" : ""}${hi ? " hi" : ""}${f.tag === "me" ? " mine" : ""}${open.has(f.id) && !hi ? " open" : ""}`;
+  d.dataset.id = f.id;
+  const text = raw ? f.raw : (f.fact || f.raw);
+  const pend = busy.has(f.id) ? `<span class="pending">cleaning up…</span>`
+             : raw ? `<span class="pending${f.error ? " err" : ""}">${f.error ? esc(f.error) : "raw · not cleaned yet"}</span>` : "";
+  d.innerHTML = `
+    <div class="top">
+      <span class="date">${hi ? "Remember this? · " : ""}${fmtDate(f.createdAt)}</span>
+      <span class="pill" data-act="tag">${esc(f.tag || "other")}</span>
+      <span class="spacer"></span>${pend}
+    </div>
+    <div class="fact" data-act="open">${esc(text)}</div>
+    ${f.note ? `<div class="note">${esc(f.note)}</div>` : ""}
+    ${f.url ? `<div class="src"><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || f.url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a></div>` : ""}
+    <div class="actions">
+      <button data-act="edit">edit</button>
+      <button data-act="clean">clean up</button>
+      ${raw ? "" : `<button data-act="showraw">original</button>`}
+      <button data-act="del" class="danger">delete</button>
+    </div>`;
+  return d;
+}
+
+/* ---- Mutations ---- */
+function requireSync() { if (!synced()) { toast("Sign in first"); showLogin(true); return false; } return true; }
+async function addFact(text) {
+  text = (text || "").trim();
+  if (!text) return;
+  if (!requireSync()) return;
+  const { url, text: body } = splitUrl(text);
+  const f = { id: newId(), raw: text, fact: "", tag: "other", note: "", title: "", url, status: "raw", source: "loren", createdAt: Date.now(), updatedAt: Date.now() };
+  await fs.setDoc(fs.doc(db, "facts", f.id), f);
+  randomId = null;
+  const title = await fetchTitle(url);
+  if (title) await fs.updateDoc(fs.doc(db, "facts", f.id), { title });
+  enrich({ ...f, title, _body: body });
+}
+async function patch(id, p) {
+  if (!requireSync()) return;
+  p.updatedAt = Date.now();
+  await fs.updateDoc(fs.doc(db, "facts", id), p).catch(e => { console.warn(e); toast("Save failed"); });
+}
+async function remove(id) {
+  if (!requireSync()) return;
+  await fs.deleteDoc(fs.doc(db, "facts", id)).catch(e => console.warn(e));
+}
+
+/* ---- Enrichment (Claude, straight from the browser) ---- */
+const SCHEMA = {
+  type: "object",
+  properties: {
+    fact: { type: "string", description: "The fact, cleaned up. One to three short plain sentences. Keep the interesting twist. Neutral voice, no 'I'." },
+    tag: { type: "string", enum: TAGS },
+    note: { type: "string", description: "A short caveat if the fact is contested, commonly misstated, or uncertain. Otherwise an empty string." }
+  },
+  required: ["fact", "tag", "note"],
+  additionalProperties: false
+};
+const SYSTEM = `You tidy quick notes into entries for a personal log of interesting facts. The person types a rough line, often right after watching a YouTube video. Rewrite it as a clean fact.
+
+Rules:
+- Write one to three short sentences in plain words. Active voice. No idioms.
+- State the fact the way the note intends. Keep the surprising part. Do not flatten it into a textbook line.
+- Do not add details the note does not support, except one well-known piece of context if it makes the fact clearer.
+- If the note is only a link and a title, write the fact from the title carefully, and say in the note that it was inferred from the title.
+- If the fact is a common myth, contested, or a leading theory rather than settled, say so briefly in the note. Otherwise leave the note empty.
+- Choose the single best tag. Use "me" only for facts about the person themself.`;
+
+async function enrich(f) {
+  const key = getKey();
+  if (!key) { render(); return; }
+  if (busy.has(f.id)) return;
+  busy.add(f.id); render();
+  const body = f._body ?? splitUrl(f.raw).text;
+  const user = `Note: ${body || "(no text, only a link)"}` + (f.url ? `\nLink: ${f.url}` : "") + (f.title ? `\nLink title: ${f.title}` : "");
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "server-side-fallback-2026-07-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: MODEL, max_tokens: 1024, fallbacks: "default",
+        system: SYSTEM,
+        output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
+        messages: [{ role: "user", content: user }]
+      })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
+    if (j.stop_reason === "refusal") throw new Error("Claude declined this one");
+    const text = (j.content || []).find(b => b.type === "text")?.text || "";
+    const out = JSON.parse(text);
+    await patch(f.id, { fact: out.fact, tag: TAGS.includes(out.tag) ? out.tag : "other", note: out.note || "", status: "done", error: "" });
+  } catch (e) {
+    console.warn("enrich failed", e);
+    await patch(f.id, { error: "cleanup failed: " + (e.message || "unknown") });
+    toast("Saved raw. Cleanup failed.");
+  } finally { busy.delete(f.id); render(); }
+}
+async function cleanAllRaw() {
+  const raws = facts.filter(f => f.status !== "done");
+  if (!raws.length) { toast("Nothing raw"); return; }
+  if (!getKey()) { toast("Add an API key first"); return; }
+  toast(`Cleaning ${raws.length}…`);
+  for (const f of raws) await enrich(f);
+}
+
+/* ---- Events ---- */
+function autoGrow() { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px"; }
+inputEl.addEventListener("input", autoGrow);
+inputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !/Mobi|iPhone|Android/i.test(navigator.userAgent)) { e.preventDefault(); $("#composer").requestSubmit(); }
+});
+$("#composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const v = inputEl.value.trim();
+  if (!v) return;
+  const low = v.toLowerCase();
+  if (low === "random" || low === "?") { inputEl.value = ""; autoGrow(); pickRandom(); return; }
+  inputEl.value = ""; autoGrow();
+  await addFact(v);
+  render(true);
+});
+$("#search").addEventListener("input", (e) => { query = e.target.value; render(); });
+$("#tags").addEventListener("click", (e) => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  filterTag = filterTag === c.dataset.tag ? "" : c.dataset.tag; render(true);
+});
+function pickRandom() {
+  const pool = facts.filter(f => f.status === "done" && f.id !== randomId);
+  if (!pool.length) { toast("No cleaned facts yet"); return; }
+  randomId = pool[Math.floor(Math.random() * pool.length)].id;
+  render(true);
+}
+$("#randomBtn").addEventListener("click", pickRandom);
+listEl.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const card = el.closest(".card"); const id = card?.dataset.id; const f = facts.find(x => x.id === id);
+  if (!f) return;
+  const act = el.dataset.act;
+  if (act === "open") { if (card.classList.contains("hi")) { randomId = null; render(); return; } open.has(id) ? open.delete(id) : open.add(id); card.classList.toggle("open"); }
+  else if (act === "tag") { const i = TAGS.indexOf(f.tag); await patch(id, { tag: TAGS[(i + 1) % TAGS.length] }); }
+  else if (act === "edit") { const v = prompt("Edit fact", f.status === "done" ? f.fact : f.raw); if (v !== null && v.trim()) await patch(id, f.status === "done" ? { fact: v.trim() } : { raw: v.trim() }); }
+  else if (act === "clean") { if (!getKey()) { toast("Add an API key in ⚙ first"); return; } enrich(f); }
+  else if (act === "showraw") { alert("You typed:\n\n" + f.raw); }
+  else if (act === "del") { if (confirm("Delete this fact?")) { open.delete(id); await remove(id); } }
+});
+
+/* ---- Settings ---- */
+$("#settingsBtn").addEventListener("click", () => {
+  $("#apiKey").value = getKey();
+  $("#keyMsg").textContent = getKey() ? "Key saved on this device." : "No key on this device.";
+  const n = facts.filter(f => f.status !== "done").length;
+  $("#rawCount").textContent = n ? `${n} raw fact${n > 1 ? "s" : ""} waiting for cleanup.` : "No raw facts waiting.";
+  $("#settings").style.display = "flex";
+});
+$("#closeSettings").addEventListener("click", () => { $("#settings").style.display = "none"; });
+$("#saveKey").addEventListener("click", () => { const v = $("#apiKey").value.trim(); try { localStorage.setItem("facts.apiKey", v); } catch {} $("#keyMsg").textContent = v ? "Saved." : "Cleared."; });
+$("#clearKey").addEventListener("click", () => { $("#apiKey").value = ""; try { localStorage.removeItem("facts.apiKey"); } catch {} $("#keyMsg").textContent = "Cleared."; });
+$("#testKey").addEventListener("click", async () => {
+  const key = $("#apiKey").value.trim(); if (!key) { $("#keyMsg").textContent = "Paste a key first."; return; }
+  $("#keyMsg").textContent = "Testing…";
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/models/" + MODEL, { headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" } });
+    const j = await r.json();
+    $("#keyMsg").textContent = r.ok ? `Works. Model: ${j.display_name || MODEL}.` : (j.error?.message || `HTTP ${r.status}`);
+  } catch (e) { $("#keyMsg").textContent = "Network error: " + e.message; }
+});
+$("#cleanRaw").addEventListener("click", () => { $("#settings").style.display = "none"; cleanAllRaw(); });
+$("#signOut").addEventListener("click", async () => { if (auth) await authMod.signOut(auth); $("#settings").style.display = "none"; });
+
+/* ---- Sync + auth (same flow as Board) ---- */
+function setStatus(mode) {
+  dotEl.className = "dot " + mode;
+  statusText.textContent = mode === "live" ? "Synced" : mode === "local" ? "Not signed in" : "Connecting…";
+}
+function showLogin(show) { $("#login").style.display = show ? "flex" : "none"; }
+function startSnapshot() {
+  if (snapStarted) return;
+  snapStarted = true;
+  fs.onSnapshot(fs.collection(db, "facts"), (snap) => {
+    facts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    saveLocal(); render(); setStatus("live");
+    handleShareParams();
+  }, (err) => { console.warn("sync error", err); setStatus("local"); toast("Sync error: " + (err.code || err.message)); });
+}
+async function initSync() {
+  setStatus("connecting");
+  try {
+    const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    fs = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    db = fs.getFirestore(app);
+    auth = authMod.getAuth(app);
+    authMod.onAuthStateChanged(auth, (user) => {
+      if (user) { showLogin(false); startSnapshot(); }
+      else { showLogin(true); setStatus("local"); }
+    });
+    $("#loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("#email").value.trim(), pw = $("#password").value, msg = $("#loginMsg"), btn = $("#loginBtn");
+      if (!email || !pw) return;
+      btn.disabled = true; msg.textContent = "Signing in…";
+      try { await authMod.signInWithEmailAndPassword(auth, email, pw); }
+      catch (err) { msg.textContent = err.code === "auth/invalid-credential" ? "Wrong email or password." : (err.code || "Sign-in failed."); }
+      finally { btn.disabled = false; }
+    });
+  } catch (err) { console.warn("Firebase unavailable:", err); setStatus("local"); }
+}
+
+/* ---- Share-in via URL: ?q=text  (or ?text=&url= from an iOS Shortcut), &go=1 logs it at once ---- */
+let shareHandled = false;
+function handleShareParams() {
+  if (shareHandled) return;
+  shareHandled = true;
+  const p = new URLSearchParams(location.search);
+  const q = [p.get("q"), p.get("text"), p.get("url")].filter(Boolean).join(" ").trim();
+  if (!q) return;
+  history.replaceState(null, "", location.pathname);
+  if (p.get("go") === "1") { addFact(q).then(() => render(true)); toast("Logged from share"); }
+  else { inputEl.value = q; autoGrow(); inputEl.focus(); }
+}
+
+/* ---- Boot ---- */
+loadLocal();
+render(true);
+initSync();
+</script>
+</body>
+</html>

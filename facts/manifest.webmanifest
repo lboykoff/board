@@ -1,0 +1,14 @@
+{
+  "name": "Facts",
+  "short_name": "Facts",
+  "description": "A log of interesting facts, cleaned up by Claude.",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "start_url": ".",
+  "scope": ".",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
